@@ -1,0 +1,3 @@
+[ ] module über __import__() anstatt exec() laden
+[ ] config-liste als dictionary benutzen
+[ ] config-handling auslagern, refactoring

@@ -1,0 +1,4 @@
+Ist-Zustand:
+
+IRC / Event Loop wird direkt im Hauptprogramm gestartet
+hauptprogramm lädt verschiedene Module nach
