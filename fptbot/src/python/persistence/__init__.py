@@ -28,8 +28,6 @@ THE SOFTWARE.
 """
 
 __all__ = [
-    "irc",
-    "http",
-    "syncml",
-    "caldav"
+    "persistence",
+    "file"
 ]
