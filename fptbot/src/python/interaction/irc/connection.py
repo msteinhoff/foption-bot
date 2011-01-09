@@ -1,5 +1,6 @@
 """
 $Id$
+
 $URL$
 
 Copyright (c) 2010 foption
@@ -21,6 +22,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+@since 06.01.2010
+@author Mario Steinhoff
 """
 
 from socket import socket
@@ -30,7 +34,7 @@ from core.messages import message
 
 class Connection( object ):
     """
-    This class implements the low level socket required for IRC connections
+    The low level socket implementation required for IRC connections
     
     It opens and closes the socket and sets up socket parameters like timeout or blocking
     
@@ -58,12 +62,9 @@ class Connection( object ):
         """
         open and connect the socket
         
-        @param server: a dictionary with server connection data
-        
-                       the dictionary should contain the following keys:
-                       
-                       server.address: An IP address or DNS name
-                       server.port:    The port
+        @param server: a dictionary with server connection data, should contain the following keys:
+                       address: An IP address or DNS name
+                       port:    The port
         """
         
         if server.address == None or server.port == None:
@@ -113,7 +114,26 @@ class Connection( object ):
             raise IOError("the socket is not open")
         
         try:
-            data = self.socket.recv(self.recvBuffer);
+            buffer = []
+
+            while True
+                # get everything we have
+                recv = self.socket.recv(self.recvBuffer) 
+            
+                if recv == 0
+                    break
+                
+                buffer.append(recv)
+            
+            
+                while data.find('\r\n') != -1:
+                    parts = data.split('\n', 1)
+                    rawmsg = parts[0]
+                    data = parts[1]
+    
+            
+            
+            
             
         except socket.timeout:
             log.error(message[20004], {'seconds': self.timeout})
