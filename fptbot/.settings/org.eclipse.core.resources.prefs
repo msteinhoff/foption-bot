@@ -1,0 +1,12 @@
+#Sun Jan 09 01:57:23 CET 2011
+eclipse.preferences.version=1
+encoding//src/python/core/bot.py=utf-8
+encoding//src/python/core/config.py=utf-8
+encoding//src/python/interaction/irc/system.py=utf-8
+encoding//src/python/modules/adminmod.py=utf-8
+encoding//src/python/modules/bombkick.py=utf-8
+encoding//src/python/modules/nicklist.py=utf-8
+encoding//src/python/modules/orakel.py=iso-8859-1
+encoding//src/python/modules/topic.py=iso-8859-1
+encoding//src/python/modules/ts3.py=utf-8
+encoding//src/python/modules/wissen.py=utf-8
