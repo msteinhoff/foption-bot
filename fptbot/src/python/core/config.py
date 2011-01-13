@@ -133,15 +133,25 @@ class Config():
         
         filename = path.join(DIR_CONFIG, self._name)
         
-        loaded = self._validate(self._persistence.read(filename))
+        try:
+            loaded = self._validate(self._persistence.read(filename))
         
-        self._keys.update(loaded)
+            self._keys.update(loaded)
+            
+        except IOError:
+            # could not load shit dude
+            pass
     
     def save(self):
         """
         Save the current configuration data to persistence.
         """
         
-        filename = path.join(DIR_CONFIG, self._name)
+        try:
+            filename = path.join(DIR_CONFIG, self._name)
+                
+            self.persistence.write(filename, self._keys)
             
-        self.persistence.write(filename, self._keys)
+        except IOError:
+            # could not save shit dude
+            pass
