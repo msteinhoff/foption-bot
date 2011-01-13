@@ -161,7 +161,7 @@ class Client(Interaction, async_chat):
         @param data: The data which was received.
         """
         
-        data = [line.strip(CRLF) for line in data]
+        data = "".join([line.strip(CRLF) for line in data])
         
         source, command, params = self.parse_message(data)
         
@@ -197,11 +197,6 @@ class Client(Interaction, async_chat):
         - command, the IRC command or reply
         - params, all parameters, parsed according to RFC section 2.3.1
         
-        Currently, the implementation is not a real parser, but works
-        in most conditions.
-        
-        TODO: write a proper parser with full RFC support. 
-        
         @param message: The raw message
         
         @return a tupel (source, command, params)
@@ -216,27 +211,26 @@ class Client(Interaction, async_chat):
             source = None
 
         """---------------------------------------------------------------------
-        Parse the message components
-        
-        The command and its parameters are separated by the follwing rules:
-        
-        - The command can be any string with at least 1 letter or a 3 digit number.
-        - A command can only have 14 parameters.
-        - Every parameter must start with a space.
-        - After the space, there must be at least one character except NUL, CR, LF, space, or colon.
-        - After the first character, there can be further characters or colons.
-        - If the parameter itself contains a space, it has to be separated by a space and a colon, " :"
-        [...]
+        Separate command and parameters
         ---------------------------------------------------------------------"""
         try:
-            message = split(message, ' :')
+            msg_nosp, msg_sp = split(message, ' :', 1)
+            msg_split = split(msg_nosp, ' ')
             
-            command = message[0]
-            params = message[1:]
-        
+            command = msg_split[0]
+            params = msg_split[1:]
+            params.append(msg_sp)
+            
         except ValueError:
-            command = message
-            params = ''
+            try:
+                msg = split(message, ' ')
+                command = msg[0]
+                params = msg[1:]
+                
+            except ValueError:
+                command = msg
+                params = ['']
+
         
         return source, command, params
 
@@ -258,7 +252,7 @@ class Client(Interaction, async_chat):
         Implement IRC protocol for disconnecting and set internal state.
         """
         
-        self.send_irc(["QUIT", "i did it for the lulz mkay"])
+        #self.send_irc(["QUIT", "i did it for the lulz mkay"])
         
         self._isConnected = False
 
