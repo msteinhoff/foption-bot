@@ -27,11 +27,15 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+# $Source$
+
 __all__ = [
-    "bot",
-    "constants",
     "messages",
+    "constants",
+    "exceptions",
+
+    "bot",
     "config",
     "logger",
-    "modules"
 ]
