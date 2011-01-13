@@ -37,5 +37,4 @@ __all__ = [
 
     "bot",
     "config",
-    "logger",
 ]
