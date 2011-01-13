@@ -27,50 +27,81 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-from multiprocessing import Process
+__version__ = "$Rev$"
+# $Source$
+from multiprocessing         import Process
+from logging                 import basicConfig
+from logging                 import getLogger
+from logging                 import DEBUG
 
-from core.config            import Config
-from core.logger            import Logger
-from persistence.file       import File
-from interaction.irc.client import Client
-
-class BotConfig(Config):
-    """
-    the general bot configuration
-    """
-    
-    def __init__(self, persistence):
-        """
-        initialize configuration structure
-        """
-        valid = {}
-        defaults = {}
-        
-        Config.__init__("bot", persistence, valid, defaults);
-
+from persistence.file        import File
+from core.config             import Config
+from interaction.interaction import startInteraction
+from interaction.irc.client  import Client
 
 class Bot(object):
     """
-    The base class that manages all sub systems
+    Provide general functionality and start all subsystems.
     """
     
+    class BotConfig(Config):
+        def __init__(self, persistence):
+            valid = [
+            ]
+            
+            defaults = {
+            }
+            
+            Config.__init__(self, "bot", persistence, valid, defaults);
+
     def __init__(self):
         """
-        initialize the system
+        Initialize the bot.
         """
-        self.persistence = File()
         
-        self.config = BotConfig(self.persistence)
-        self.logger = Logger() 
+        basicConfig(level=DEBUG)
         
-        self.interaction = {}
-        self.interaction['irc'] = Client(user, server)
+        self._persistence = File()
+        
+        self._config = self.BotConfig(self.getPersistence())
+        
+        self._interaction = {}
+        self._interaction['irc'] = Client
+        
+        self._processes = {}
+        
+    def getPersistence(self):
+        """
+        Return the persistence instance.
+        """
+        
+        return self._persistence
+    
+    def getLogger(self, name=None):
+        """
+        Return a logger instance.
+        
+        @param name: The intended name. If no name is given, a default
+        of 'core.bot' is used.
+        """
+        
+        if name == None:
+            name = "core.bot"
+            
+        return getLogger(name)
 
     def run(self):
         """
-        start the system
+        Start the system.
+        
+        Initialize all interaction components in their own thread
+        and call their start() method.
         """
         
-        logProcess = Process(target=Logger)
-        logProcess.start()
+        self.getLogger().info("starting the system")
         
+        for name, object in self._interaction.items():
+            self._processes[name] = Process(target=startInteraction, args=(self, object))
+            self._processes[name].start()
+        
+        self.getLogger().info("startup completed")
