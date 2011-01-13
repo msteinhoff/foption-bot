@@ -161,6 +161,13 @@ class Client(Interaction, async_chat):
         @param data: The data which was received.
         """
         
+        """
+        This is possible since this method gets called right after CRLF
+        is detected, so there should only be one element in the buffer
+        at call-time.
+        If there is more than one element in the buffer, everthing gets
+        screwed really hard.
+        """
         data = "".join([line.strip(CRLF) for line in data])
         
         source, command, params = self.parse_message(data)
