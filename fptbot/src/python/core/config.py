@@ -27,146 +27,117 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+# $Source$
+
 from os import path
 
-from core.constants          import DIR_CONFIG
-from core.messages           import message
-from persistence.persistence import Persistence
+from core.constants import DIR_CONFIG
 
-class Config(object):
+class Config():
     """
-    Base class for system configuration
-    """
-
-    def __init__(self, name, persistence, valid, defaults={}):
-        """
-        initialize the configuration
-        
-        @param name: the configuration name
-        @param persistence: the persistence
-        @param valid: a list with valid keys
-        @param defaults: a dictionary with default values. the 
-        """
-        
-        if not isinstance( persistence, Persistence ):
-            raise TypeError( "invalid persistence instance" )
+    Provide abstract system-wide configuration handling.
     
-        self.name  = name
-        self.valid = valid
-        self.keys  = self.__checkKeys(defaults)
-        self.persistence = persistence
+    TODO: Implement dict-style access for key/value-pairs.
+    """
+
+    def __init__(self, name, persistence):
+        """
+        Initialize the configuration.
         
-        # Go-Go-Gadget Helicopter
+        @param name: The configuration name
+        @param persistence: The persistence
+        @param valid: A list with valid keys
+        @param defaults: A dictionary with default values. This data
+        is validated against the valid key list.
+        """
+        
+        self._name  = name
+        self._persistence = persistence
+        self._keys  = self._validate(self.defaults())
+        
         self.load()
-
-
-    def __del__(self):
-        """
-        cleanup: try to save configuration data to persistence before deletion
-        """
         
-        self.save()
-    
-    
-    def __checkKeys(self, keys):
+    def _validate(self, dict):
         """
-        check a given configuration dictionary against valid keys
-        invalid entries will be removed 
+        Validate a configuration dictionary against the config structure.
         
-        @param keys the dictionary to check
+        Keys that do not match will be removed and returned in
+        a new dictionary.
+        
+        @param dict: the dictionary to validate
         
         @return a dictionary with all valid keys
         """
         
         result = {}
         
-        for key, value in keys:
-            if key not in self.valid:
+        for key in dict:
+            if key not in self.valid():
                 continue
             
-            result[key] = value
+            result[key] = dict[key]
             
         return result
-        
     
-    def __getattr__(self, name):
+    def valid(self):
         """
-        map configuration keys to class attribute for ease of use
-        
-        read a configuration key
-        
-        @param name: name of the configuration key
-        
-        @return the configuration key
-        
-        @raise AttributeError: if the key is not found 
+        Return a list representing valid configuration keys.
         """
-        
-        if name not in self.keys:
-            raise AttributeError
-        
-        return self.keys[name]
+        raise NotImplementedError
     
-    
-    def __delattr__(self, name):
+    def defaults(self):
         """
-        map configuration keys to class attribute for ease of use
+        Return a dictionary with default values that ideally match
+        the list returned by valid().
+        """
+        raise NotImplementedError
+    
+    def set(self, name, value):
+        """
+        Set a configuration value.
         
-        delete a configuration key
-        
-        @param name: name of the configuration key
-        
-        @raise AttributeError: if the key is not found 
+        @param name: the name of the entry
+        @param value: the value of the entry
         """
         
-        if name not in self.keys:
-            raise AttributeError
+        self._keys[name] = value
         
-        del self.keys[name]
-    
-    
-    def __setattr__(self, name, value):
+    def get(self, name):
         """
-        map configuration keys to class attribute for ease of use
+        Return a configuration value.
         
-        set a configuration key
+        @param name: the name of the entry
+        """
+        return self._keys[name]
         
-        @param name: name of the configuration key
-        @param value: the associated value
+    def delete(self, name):
+        """
+        Remove a configuration value.
+        
+        @param name: the name of the entry
+        """
+        del self._keys[name]
+
+    def load(self):
+        """
+        Load configuration data from persistence.
+        
+        Existing keys are updated. If a key in the current instance
+        exists but was not found in the persistence, it remains untouched. 
         """
         
-        self.keys[name] = value
-        pass
-    
+        filename = path.join(DIR_CONFIG, self._name)
+        
+        loaded = self._validate(self._persistence.read(filename))
+        
+        self._keys.update(loaded)
     
     def save(self):
         """
-        save the current configuration data to persistence
+        Save the current configuration data to persistence.
         """
         
-        try:
-            filename = path.join(DIR_CONFIG, self.name)
+        filename = path.join(DIR_CONFIG, self._name)
             
-            self.persistence.write(filename, self.keys)
-            
-            log.info(message[01000])
-            
-        except:
-            log.error(message[01001])
-            
-        
-        
-    def load(self):
-        """
-        load configuration data from persistence
-        """
-        
-        try:
-            filename = path.join(DIR_CONFIG, self.name)
-            
-            self.keys = self.__checkKeys(self.persistence.read(filename))
-            
-            log.info(message[01002])
-            
-        except:
-            log.error(message[01003])
+        self.persistence.write(filename, self._keys)
