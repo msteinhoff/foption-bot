@@ -28,16 +28,14 @@ THE SOFTWARE.
 """
 
 from string   import split, join
-from socket   import AF_INET
-from socket   import SOCK_STREAM
+from socket   import AF_INET, SOCK_STREAM
 from asyncore import loop
 from asynchat import async_chat
 
 from core.messages              import message
 from core.config                import Config
 from interaction.interaction    import Interaction
-from interaction.irc.user       import Userlist
-from interaction.irc.user       import User
+from interaction.irc.user       import Userlist, User
 
 SPACE      = "\x20"
 CRLF       = "\x0D\x0A"

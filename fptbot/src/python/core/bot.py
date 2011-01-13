@@ -29,10 +29,8 @@ THE SOFTWARE.
 
 __version__ = "$Rev$"
 # $Source$
-from multiprocessing         import Process
-from logging                 import basicConfig
-from logging                 import getLogger
-from logging                 import DEBUG
+from logging         import basicConfig, getLogger, DEBUG
+from multiprocessing import Process
 
 from persistence.file        import File
 from core.config             import Config
