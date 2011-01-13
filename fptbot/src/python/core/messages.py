@@ -41,6 +41,13 @@ Currently, the following number ranges are defined:
 20001-20200: IRC
 """
 
+__version__ = "$Rev$"
+# $Source$
+
+__all__ = [
+    "message"
+]
+
 message = {}
 
 message[01000] = "configuration saved"
@@ -48,13 +55,12 @@ message[01001] = "unable to save configuration"
 message[01002] = "configuration loaded"
 message[01003] = "unable to load configuration: config file was found"
 
-message[20001] = "trying to connect to %(server)s:%(port)d"
-message[20002] = "failed to open socket"
-message[20003] = "closing connection, requested by command (Admin)"
-message[20004] = "connection timed out (%(seconds)d seconds)"
-message[20005] = "closing connection... NO DATA RECV"
-message[20006] = "closing connection"
-message[20007] = "error with stream"
+message[20001] = "trying to connect to %(address)s:%(port)d"
+message[20002] = "connection failed"
+message[20003] = "closing connection"
+message[20005] = ""
+message[20006] = ""
+message[20007] = ""
 message[20008] = ""
 message[20009] = ""
 message[20010] = ""
