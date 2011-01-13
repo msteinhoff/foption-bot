@@ -84,6 +84,7 @@ class Config():
         """
         Return a list representing valid configuration keys.
         """
+        
         raise NotImplementedError
     
     def defaults(self):
@@ -91,6 +92,7 @@ class Config():
         Return a dictionary with default values that ideally match
         the list returned by valid().
         """
+        
         raise NotImplementedError
     
     def set(self, name, value):
@@ -109,6 +111,7 @@ class Config():
         
         @param name: the name of the entry
         """
+        
         return self._keys[name]
         
     def delete(self, name):
@@ -117,6 +120,7 @@ class Config():
         
         @param name: the name of the entry
         """
+        
         del self._keys[name]
 
     def load(self):
