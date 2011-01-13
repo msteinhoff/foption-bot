@@ -46,13 +46,13 @@ class Bot(object):
     
     class BotConfig(Config):
         def __init__(self, persistence):
-            valid = [
-            ]
+            Config.__init__(self, "bot", persistence);
             
-            defaults = {
-            }
-            
-            Config.__init__(self, "bot", persistence, valid, defaults);
+        def valid(self):
+            return []
+        
+        def defaults(self):
+            return {}
 
     def __init__(self):
         """
