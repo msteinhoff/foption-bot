@@ -25,7 +25,12 @@ THE SOFTWARE.
 
 @since Jan 9, 2011
 @author Mario Steinhoff
+
+TODO: Make environment-specific data configurable.
 """
+
+__version__ = "$Rev$"
+# $Source$
 
 __all__ = [
     "DIR_ROOT",
