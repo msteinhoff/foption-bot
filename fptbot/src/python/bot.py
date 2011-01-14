@@ -27,6 +27,8 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 from core.bot import Bot
 
 if __name__ == '__main__':
