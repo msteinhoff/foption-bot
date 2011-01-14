@@ -28,7 +28,6 @@ THE SOFTWARE.
 """
 
 __version__ = "$Rev$"
-# $Source$
 
 __all__ = [
     "messages",
