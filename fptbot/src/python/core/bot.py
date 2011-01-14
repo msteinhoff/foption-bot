@@ -28,13 +28,13 @@ THE SOFTWARE.
 """
 
 __version__ = "$Rev$"
-# $Source$
+
 from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
 
 from persistence.file        import File
 from core.config             import Config
-from interaction.interaction import startInteraction
+from interaction.interaction import Interaction
 from interaction.irc.client  import Client
 
 class Bot(object):
@@ -44,7 +44,7 @@ class Bot(object):
     
     class BotConfig(Config):
         def name(self):
-            return "bot"
+            return "core.bot"
             
         def valid(self):
             return []
@@ -99,7 +99,7 @@ class Bot(object):
         self.getLogger().info("starting the system")
         
         for name, object in self._interaction.items():
-            self._processes[name] = Process(target=startInteraction, args=(self, object))
+            self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
             self._processes[name].start()
         
         self.getLogger().info("startup completed")
