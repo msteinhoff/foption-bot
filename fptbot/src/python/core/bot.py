@@ -43,8 +43,8 @@ class Bot(object):
     """
     
     class BotConfig(Config):
-        def __init__(self, persistence):
-            Config.__init__(self, "bot", persistence);
+        def name(self):
+            return "bot"
             
         def valid(self):
             return []

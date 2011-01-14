@@ -47,8 +47,8 @@ class Client(Interaction, async_chat):
     """
     
     class ClientConfig(Config):
-        def __init__(self, persistence):
-            Config.__init__(self, "irc-client", persistence);
+        def name(self):
+            return "irc-client"
             
         def valid(self):
             return [
@@ -81,7 +81,7 @@ class Client(Interaction, async_chat):
         async_chat.__init__(self)
         
         self._logger = self._bot.getLogger("interaction.irc")
-        self._config = self.ClientConfig(bot.getPersistence())
+        self._config = self.ClientConfig(self._bot.getPersistence())
         self._userlist = Userlist()
         self._modules = {}
         
