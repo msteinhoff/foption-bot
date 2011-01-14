@@ -1,0 +1,41 @@
+jeder command kann prinzipiell vom client und server ausgehen
+es wird bei jedem command spezifiziert wer wohin senden darf
+es wird zwischen commands (aktiv) und replies (passiv) unterschieden
+
+es bietet sich an, commands und replies zu abstrahieren und als event zu behandeln.
+
+anforderungen:
+senden:
+events müssen vom bot aus zu einem beliebigen zeitpunkt gesendet werden können, z.B. von
+timern, webinterface, andere threads, etc
+
+empfangen:
+empfangene events müssen verarbeitet und an entsprechende handler weitergereicht werden
+dabei wird zwischen erstmal IRC-implementierung und bot-implmentierung unterschieden
+
+IRC-implementierung:
+reaktionen auf message-events
+- server-aktivität (ping, pong)
+- channel-aktivität (topic, mode)
+- user-aktivität (nicklist)
+
+reaktionen auf reply-events
+- status-informationen
+- fehler-behandlung
+
+Bot-implementierugn:
+reaktionen auf beliebig konfigurierbare events
+
+es bietet sich an, den code für das registrieren und dispatchen von events ebenfalls zu
+abstrahieren und von beiden implementierungen zu nutzen.
+
+
+TODO:
+[X] Message parsing
+[X] Message composing
+[X] Data objects: Message, Event, Source
+
+[ ] Event registration configuration and code
+[ ] Event dispatching code
+
+[ ] Handler methods for all IRC commands
