@@ -41,7 +41,7 @@ class Config():
     TODO: Implement dict-style access for key/value-pairs.
     """
 
-    def __init__(self, name, persistence):
+    def __init__(self, persistence):
         """
         Initialize the configuration.
         
@@ -52,7 +52,6 @@ class Config():
         is validated against the valid key list.
         """
         
-        self._name  = name
         self._persistence = persistence
         self._keys  = self._validate(self.defaults())
         
@@ -79,6 +78,13 @@ class Config():
             result[key] = dict[key]
             
         return result
+    
+    def name(self):
+        """
+        Return the configuration's name.
+        """
+        
+        raise NotImplementedError
     
     def valid(self):
         """
@@ -131,7 +137,7 @@ class Config():
         exists but was not found in the persistence, it remains untouched. 
         """
         
-        filename = path.join(DIR_CONFIG, self._name)
+        filename = path.join(DIR_CONFIG, self.name())
         
         try:
             loaded = self._validate(self._persistence.read(filename))
@@ -148,7 +154,7 @@ class Config():
         """
         
         try:
-            filename = path.join(DIR_CONFIG, self._name)
+            filename = path.join(DIR_CONFIG, self.name())
                 
             self.persistence.write(filename, self._keys)
             
