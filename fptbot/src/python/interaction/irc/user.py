@@ -27,6 +27,8 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 class Privilege(object):
     USER = 1
     ADMIN = 2
