@@ -27,8 +27,10 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 __all__ = [
     "client",
-    "connection",
-    "networks"
+    "modules",
+    "networks",
 ]
