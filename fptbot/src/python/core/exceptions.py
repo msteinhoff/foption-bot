@@ -28,5 +28,4 @@ THE SOFTWARE.
 """
 
 __version__ = "$Rev$"
-# $Source$
 
