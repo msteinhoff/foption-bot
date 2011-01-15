@@ -28,7 +28,6 @@ THE SOFTWARE.
 """
 
 __version__ = "$Rev$"
-# $Source$
 
 from os import path
 
@@ -45,11 +44,7 @@ class Config():
         """
         Initialize the configuration.
         
-        @param name: The configuration name
         @param persistence: The persistence
-        @param valid: A list with valid keys
-        @param defaults: A dictionary with default values. This data
-        is validated against the valid key list.
         """
         
         self._persistence = persistence
@@ -64,9 +59,9 @@ class Config():
         Keys that do not match will be removed and returned in
         a new dictionary.
         
-        @param dict: the dictionary to validate
+        @param dict: The dictionary to validate
         
-        @return a dictionary with all valid keys
+        @return A dictionary with all valid keys
         """
         
         result = {}
@@ -95,8 +90,8 @@ class Config():
     
     def defaults(self):
         """
-        Return a dictionary with default values that ideally match
-        the list returned by valid().
+        Return a dictionary with default values. This dictionary
+        is validated against the list returned by valid().
         """
         
         raise NotImplementedError
