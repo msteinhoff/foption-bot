@@ -42,7 +42,6 @@ Currently, the following number ranges are defined:
 """
 
 __version__ = "$Rev$"
-# $Source$
 
 __all__ = [
     "message"
