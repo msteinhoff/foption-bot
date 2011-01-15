@@ -27,12 +27,14 @@ THE SOFTWARE.
 @author msteinhoff
 """
 
-def startInteraction(bot, object):
-    instance = object(bot)
-    instance.start()
+__version__ = "$Rev$"
 
 class Interaction(object):
-    
+    @staticmethod
+    def startInteraction(bot, object):
+        instance = object(bot)
+        instance.start()
+
     def __init__(self, bot):
         self._bot = bot
     
