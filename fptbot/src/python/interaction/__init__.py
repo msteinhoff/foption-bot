@@ -27,6 +27,8 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 __all__ = [
     "irc",
     "http",
