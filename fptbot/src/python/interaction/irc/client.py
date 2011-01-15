@@ -27,15 +27,17 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-from string   import split, join
+__version__ = "$Rev$"
+
 from socket   import AF_INET, SOCK_STREAM
 from asyncore import loop
 from asynchat import async_chat
 
-from core.messages              import message
-from core.config                import Config
-from interaction.interaction    import Interaction
-from interaction.irc.user       import Userlist, User
+from core.messages                   import message
+from core.config                     import Config
+from interaction.interaction         import Interaction
+from interaction.irc.user            import Userlist, User
+from interaction.irc.message.message import Message, Event
 
 SPACE      = "\x20"
 CRLF       = "\x0D\x0A"
@@ -48,7 +50,7 @@ class Client(Interaction, async_chat):
     
     class ClientConfig(Config):
         def name(self):
-            return "irc-client"
+            return "interaction.irc"
             
         def valid(self):
             return [
@@ -57,12 +59,13 @@ class Client(Interaction, async_chat):
                 "realname",
                 "ident",
                 "address",
-                "port"
+                "port",
+                "modules"
             ]
         
         def defaults(self):
             return {
-                "nickname"  : "bot-test",
+                "nickname"  : "bot-test---",
                 "anickname" : "bot-test-",
                 "realname"  : "bot",
                 "ident"     : "bot",
@@ -96,7 +99,7 @@ class Client(Interaction, async_chat):
         @param name: The name of the module that should be registered
         """
         
-        moduleName = "modules.%s" % name
+        moduleName = 'modules.{0}'.format(name)
         
         module = __import__(moduleName, globals(), locals(), [], -1)
         
@@ -149,98 +152,37 @@ class Client(Interaction, async_chat):
 
     """-------------------------------------------------------------------------
     Communication interface
-    
-    TODO: Create consistent API to send/compose and receive/parse IRC messages.
     -------------------------------------------------------------------------"""
-    def receive_irc(self, data):
+    def receive_irc(self, event):
         """
         Handle all interaction when there is protocol data received.
+        Dispatch events to handler methods according to the internal
+        dispatching configuration.
         
-        Strip IRC protocol control characters.
-        
-        @param data: The data which was received.
+        @param event: A event instance with the message data.
         """
         
-        """
-        This is possible since this method gets called right after CRLF
-        is detected, so there should only be one element in the buffer
-        at call-time.
-        If there is more than one element in the buffer, everthing gets
-        screwed really hard.
-        """
-        data = "".join([line.strip(CRLF) for line in data])
+        self._logger.info('Received: <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))        
         
-        source, command, params = self.parse_message(data)
-        
-        self._logger.info("Received: <%s> %s: %s (Raw: %s)" % (source, command, params, data))
-        
-        if command == 'PING':
-            self.send_irc(["PONG", params[0]])
+        if event.command == 'PING':
+            self.send_irc(Event(None, 'PONG', event.parameter[0:1]))
             
-        if command == '001':
-            self.send_irc(["JOIN", "#botbot.test"])
 
-    def send_irc(self, data):
+    def send_irc(self, event):
         """
         Handle all interaction when there is protocol data to send.
         
-        Add IRC protocol control characters.
+        Create message, Add IRC protocol control characters, send data.
         
-        @param data: The data to send.
+        @param event: A event instance with the message data.
         """
         
-        self._logger.info("Sent:     %s" % join(data))
-        self.push("%s%s" % (join(data), CRLF))
-
-    """-------------------------------------------------------------------------
-    Message handling
-    -------------------------------------------------------------------------"""
-    def parse_message(self, message):
-        """
-        Parse an incoming IRC message.
+        message = event.create_message()
         
-        The message is parsed into the following components:
-        - source, a string with the format e.g. nickname!ident@host, or None  
-        - command, the IRC command or reply
-        - params, all parameters, parsed according to RFC section 2.3.1
+        self._logger.info("Sent:     {0}".format(message))
         
-        @param message: The raw message
+        self.push("{0}{1}".format(message, CRLF))
         
-        @return a tupel (source, command, params)
-        """
-        
-        """---------------------------------------------------------------------
-        Handle the source of the message, if existent
-        ---------------------------------------------------------------------"""
-        if message[0] == ':':
-            source, message = split(message[1:], ' ', 1)
-        else:
-            source = None
-
-        """---------------------------------------------------------------------
-        Separate command and parameters
-        ---------------------------------------------------------------------"""
-        try:
-            msg_nosp, msg_sp = split(message, ' :', 1)
-            msg_split = split(msg_nosp, ' ')
-            
-            command = msg_split[0]
-            params = msg_split[1:]
-            params.append(msg_sp)
-            
-        except ValueError:
-            try:
-                msg = split(message, ' ')
-                command = msg[0]
-                params = msg[1:]
-                
-            except ValueError:
-                command = msg
-                params = ['']
-
-        
-        return source, command, params
-
     """-------------------------------------------------------------------------
     Implementation of asyncore methods 
     -------------------------------------------------------------------------"""
@@ -249,8 +191,8 @@ class Client(Interaction, async_chat):
         Implement IRC protocol for connecting and set internal state.
         """
         
-        self.send_irc(["NICK", self._config.get('nickname')])
-        self.send_irc(["USER", self._config.get('ident'), "0", "*", ":%s" % self._config.get('realname')])
+        self.send_irc(Event(None, 'NICK', [self._config.get('nickname')]))
+        self.send_irc(Event(None, 'USER', [self._config.get('ident'), "0", "*", "{0}".format(self._config.get('realname'))]))
         
         self._isConnected = True
     
@@ -276,9 +218,23 @@ class Client(Interaction, async_chat):
     def found_terminator(self):
         """
         Send event when a command terminator was found.
+        
+        Strip IRC protocol control characters, parse message, create event.
         """
         
         data = self._buffer
         self._buffer = []
         
-        self.receive_irc(data)
+        """
+        This is possible since this method gets called right after CRLF
+        is detected, so there should only be one message in the buffer
+        at call-time.
+        If there is more than one element/message in the buffer, everthing
+        could get screwed really hard.
+        TODO: find better way to do this
+        """
+        data = "".join([line.strip(CRLF) for line in data])
+        
+        message = Message(data)
+        
+        self.receive_irc(message.create_event())
