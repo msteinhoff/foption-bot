@@ -27,11 +27,12 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 from cPickle import dump
 from cPickle import load
 
 from persistence import Persistence
-
 
 class File(Persistence):
     '''

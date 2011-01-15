@@ -27,6 +27,8 @@ THE SOFTWARE.
 @author msteinhoff
 """
 
+__version__ = "$Rev$"
+
 class Persistence(object):
     """
     base class for persistence implementations
