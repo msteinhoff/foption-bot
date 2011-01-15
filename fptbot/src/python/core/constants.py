@@ -30,7 +30,6 @@ TODO: Make environment-specific data configurable.
 """
 
 __version__ = "$Rev$"
-# $Source$
 
 __all__ = [
     "DIR_ROOT",
@@ -40,6 +39,6 @@ __all__ = [
 
 DIR_ROOT   = "/Users/msteinhoff/Work/Eclipse/foption/bot"
 
-DIR_CONFIG = "%s/config" % (DIR_ROOT)
-DIR_DATA   = "%s/data"   % (DIR_ROOT)
-DIR_LOGS   = "%s/logs"   % (DIR_ROOT)
+DIR_CONFIG = "{0}/config".format(DIR_ROOT)
+DIR_DATA   = "{0}/data".format(DIR_ROOT)
+DIR_LOGS   = "{0}/logs".format(DIR_ROOT)
