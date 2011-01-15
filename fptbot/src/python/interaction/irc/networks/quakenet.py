@@ -27,6 +27,8 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = "$Rev$"
+
 class Quakenet(object):
     """
     Implementiert QuakeNet-spezifische funktionen
@@ -35,6 +37,6 @@ class Quakenet(object):
     ' moved auth data to config.py '
 
     def __init__(self):
-        ServerMsg("PRIVMSG Q@CServe.quakenet.org :AUTH " + self.Auth + " " + self.Password)
+        """ServerMsg("PRIVMSG Q@CServe.quakenet.org :AUTH " + self.Auth + " " + self.Password)"""
         pass
     
