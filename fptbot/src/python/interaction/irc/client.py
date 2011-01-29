@@ -29,6 +29,7 @@ THE SOFTWARE.
 
 __version__ = "$Rev$"
 
+from sys      import modules
 from socket   import AF_INET, SOCK_STREAM
 from asyncore import loop
 from asynchat import async_chat
@@ -101,6 +102,7 @@ class Client(Interaction, async_chat):
         self.channels = []
         
         rfc2812.register_with_client(self)
+        self.register_module('roll')
 
     """-------------------------------------------------------------------------
     Modules
@@ -112,13 +114,19 @@ class Client(Interaction, async_chat):
         @param name: The name of the module that should be registered
         """
         
-        moduleName = 'modules.{0}'.format(name)
+        moduleName = 'interaction.irc.modules.{0}'.format(name)
         
-        module = __import__(moduleName, globals(), locals(), [], -1)
+        __import__(moduleName, globals(), locals(), [], -1)
         
-        clazz = getattr(module, module.moduleName)
+        module = modules[moduleName]
+        
+        clazz = getattr(module, name.capitalize())
         
         self._modules[name] = clazz(self)
+        
+        for command, listener in self._modules[name].receive_listener().items():
+            self.get_command(command).add_receive_listener(listener)
+            
         
     def get_module(self, name):
         """
@@ -144,7 +152,15 @@ class Client(Interaction, async_chat):
         instance = clazz(self)
         
         self._commands[instance.token()] = instance
+    
+    def get_command(self, clazz):
+        """
+        Get a command handler.
         
+        @param clazz: A pointer to the handler class.
+        """
+        return self._commands[clazz.token()]
+    
     def send_command(self, clazz, *parameters):
         """
         Send a command.
