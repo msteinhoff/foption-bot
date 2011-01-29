@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Jan 28, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
 from interaction.irc.message import Event
@@ -848,79 +848,178 @@ class ReplyBounce(Command):
 Replies generated in the response to commands are found in the
 range from 200 to 399.
 -----------------------------------------------------------------------------"""
-RPL_TRACELINK         = "200"
-RPL_TRACECONNECTING   = "201"
-RPL_TRACEHANDSHAKE    = "202"
-RPL_TRACEUNKNOWN      = "203"
-RPL_TRACEOPERATOR     = "204"
-RPL_TRACEUSER         = "205"
-RPL_TRACESERVER       = "206"
-RPL_TRACESERVICE      = "207"
-RPL_TRACENEWTYPE      = "208"
-RPL_TRACECLASS        = "209"
-RPL_TRACERECONNECT    = "210"
-RPL_TRACELOG          = "261"
-RPL_TRACEEND          = "262"
-RPL_STATSLINKINFO     = "211"
-RPL_STATSCOMMANDS     = "212"
-RPL_ENDOFSTATS        = "219"
-RPL_STATSUPTIME       = "242"
-RPL_STATSOLINE        = "243"
-RPL_UMODEIS           = "221"
-RPL_SERVLIST          = "234"
-RPL_SERVLISTEND       = "235"
-RPL_LUSERCLIENT       = "251"
-RPL_LUSEROP           = "252"
-RPL_LUSERUNKNOWN      = "253"
-RPL_LUSERCHANNELS     = "254"
-RPL_LUSERME           = "255"
-RPL_ADMINME           = "256"
-RPL_ADMINLOC1         = "257"
-RPL_ADMINLOC2         = "258"
-RPL_ADMINEMAIL        = "259"
-RPL_TRYAGAIN          = "263"
-RPL_USERHOST          = "302"
-RPL_ISON              = "303"
-RPL_AWAY              = "301"
-RPL_UNAWAY            = "305"
-RPL_NOWAWAY           = "306"
-RPL_WHOISUSER         = "311"
-RPL_WHOISSERVER       = "312"
-RPL_WHOISOPERATOR     = "313"
-RPL_WHOISIDLE         = "317"
-RPL_ENDOFWHOIS        = "318"
-RPL_WHOISCHANNELS     = "319"
-RPL_WHOWASUSER        = "314"
-RPL_ENDOFWHOWAS       = "369"
-RPL_LISTSTART         = "321"
-RPL_LIST              = "322"
-RPL_LISTEND           = "323"
-RPL_UNIQOPIS          = "325"
-RPL_CHANNELMODEIS     = "324"
-RPL_NOTOPIC           = "331"
-RPL_TOPIC             = "332"
-RPL_INVITING          = "341"
-RPL_SUMMONING         = "342"
-RPL_INVITELIST        = "346"
-RPL_ENDOFINVITELIST   = "347"
-RPL_EXCEPTLIST        = "348"
-RPL_ENDOFEXCEPTLIST   = "349"
-RPL_VERSION           = "351"
-RPL_WHOREPLY          = "352"
-RPL_ENDOFWHO          = "315"
-RPL_NAMREPLY          = "353"
-RPL_ENDOFNAMES        = "366"
-RPL_LINKS             = "364"
-RPL_ENDOFLINKS        = "365"
-RPL_BANLIST           = "367"
-RPL_ENDOFBANLIST      = "368"
-RPL_INFO              = "371"
-RPL_ENDOFINFO         = "374"
-
-class ReplyMotdStart(Command):
+class ReplyAway(Command):
     @staticmethod
     def token():
-        return '375'
+        return '301'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWhoisUser(Command):
+    @staticmethod
+    def token():
+        return '311'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWhoisServer(Command):
+    @staticmethod
+    def token():
+        return '312'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWhoisOperator(Command):
+    @staticmethod
+    def token():
+        return '313'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfWho(Command):
+    @staticmethod
+    def token():
+        return '315'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWhoisIdle(Command):
+    @staticmethod
+    def token():
+        return '317'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfWhois(Command):
+    @staticmethod
+    def token():
+        return '318'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWhoisChannels(Command):
+    @staticmethod
+    def token():
+        return '319'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyUniqueOpIs(Command):
+    @staticmethod
+    def token():
+        return '325'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyChannelModeIs(Command):
+    @staticmethod
+    def token():
+        return '324'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyNoTopic(Command):
+    @staticmethod
+    def token():
+        return '331'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyTopic(Command):
+    @staticmethod
+    def token():
+        return '332'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyInviting(Command):
+    @staticmethod
+    def token():
+        return '341'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyInviteList(Command):
+    @staticmethod
+    def token():
+        return '346'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfInviteList(Command):
+    @staticmethod
+    def token():
+        return '347'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyExceptList(Command):
+    @staticmethod
+    def token():
+        return '348'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfExceptList(Command):
+    @staticmethod
+    def token():
+        return '349'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyWho(Command):
+    @staticmethod
+    def token():
+        return '352'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyNames(Command):
+    @staticmethod
+    def token():
+        return '353'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfNames(Command):
+    @staticmethod
+    def token():
+        return '366'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyBanList(Command):
+    @staticmethod
+    def token():
+        return '367'
+    
+    def _receive(self, event):
+        pass
+
+class ReplyEndOfBanList(Command):
+    @staticmethod
+    def token():
+        return '368'
     
     def _receive(self, event):
         pass
@@ -933,6 +1032,14 @@ class ReplyMotd(Command):
     def _receive(self, event):
         pass
 
+class ReplyMotdStart(Command):
+    @staticmethod
+    def token():
+        return '375'
+    
+    def _receive(self, event):
+        pass
+
 class ReplyMotdEnd(Command):
     @staticmethod
     def token():
@@ -941,69 +1048,270 @@ class ReplyMotdEnd(Command):
     def _receive(self, event):
         self._client.post_connect()
 
-RPL_YOUREOPER         = "381"
-RPL_REHASHING         = "382"
-RPL_YOURESERVICE      = "383"
-RPL_TIME              = "391"
-RPL_USERSSTART        = "392"
-RPL_USERS             = "393"
-RPL_ENDOFUSERS        = "394"
-RPL_NOUSERS           = "395"
 
 """-----------------------------------------------------------------------------
 Error replies are found in the range from 400 to 599.
 -----------------------------------------------------------------------------"""
-ERR_NOSUCHNICK        = "401"
-ERR_NOSUCHSERVER      = "402"
-ERR_NOSUCHCHANNEL     = "403"
-ERR_CANNOTSENDTOCHAN  = "404"
-ERR_TOOMANYCHANNELS   = "405"
-ERR_WASNOSUCHNICK     = "406"
-ERR_TOOMANYTARGETS    = "407"
-ERR_NOSUCHSERVICE     = "408"
-ERR_NOORIGIN          = "409"
-ERR_NORECIPIENT       = "411"
-ERR_NOTEXTTOSEND      = "412"
-ERR_NOTOPLEVEL        = "413"
-ERR_WILDTOPLEVEL      = "414"
-ERR_BADMASK           = "415"
-ERR_UNKNOWNCOMMAND    = "421"
-ERR_NOMOTD            = "422"
-ERR_NOADMININFO       = "423"
-ERR_FILEERROR         = "424"
-ERR_NONICKNAMEGIVEN   = "431"
-ERR_ERRONEUSNICKNAME  = "432"
-ERR_NICKNAMEINUSE     = "433"
-ERR_NICKCOLLISION     = "436"
-ERR_UNAVAILRESOURCE   = "437"
-ERR_USERNOTINCHANNEL  = "441"
-ERR_NOTONCHANNEL      = "442"
-ERR_USERONCHANNEL     = "443"
-ERR_NOLOGIN           = "444"
-ERR_SUMMONDISABLED    = "445"
-ERR_USERSDISABLED     = "446"
-ERR_NOTREGISTERED     = "451"
-ERR_NEEDMOREPARAMS    = "461"
-ERR_ALREADYREGISTRED  = "462"
-ERR_NOPERMFORHOST     = "463"
-ERR_PASSWDMISMATCH    = "464"
-ERR_YOUREBANNEDCREEP  = "465"
-ERR_YOUWILLBEBANNED   = "466"
-ERR_KEYSET            = "467"
-ERR_CHANNELISFULL     = "471"
-ERR_UNKNOWNMODE       = "472"
-ERR_INVITEONLYCHAN    = "473"
-ERR_BANNEDFROMCHAN    = "474"
-ERR_BADCHANNELKEY     = "475"
-ERR_BADCHANMASK       = "476"
-ERR_NOCHANMODES       = "477"
-ERR_BANLISTFULL       = "478"
-ERR_NOPRIVILEGES      = "481"
-ERR_CHANOPRIVSNEEDED  = "482"
-ERR_CANTKILLSERVER    = "483"
-ERR_RESTRICTED        = "484"
-ERR_UNIQOPPRIVSNEEDED = "485"
-ERR_NOOPERHOST        = "491"
-ERR_UMODEUNKNOWNFLAG  = "501"
-ERR_USERSDONTMATCH    = "502"
+class ErrorNoSuchNick(Command):
+    @staticmethod
+    def token():
+        return '401'
+    
+    def _receive(self, event):
+        self._client.post_connect()
 
+class ErrorNoSuchServer(Command):
+    @staticmethod
+    def token():
+        return '402'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoSuchChannel(Command):
+    @staticmethod
+    def token():
+        return '403'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorChannotSendToChannel(Command):
+    @staticmethod
+    def token():
+        return '404'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorTooManyChannels(Command):
+    @staticmethod
+    def token():
+        return '405'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorTooManyTargets(Command):
+    @staticmethod
+    def token():
+        return '407'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoOrigin(Command):
+    @staticmethod
+    def token():
+        return '409'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoRecipient(Command):
+    @staticmethod
+    def token():
+        return '411'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoTextToSend(Command):
+    @staticmethod
+    def token():
+        return '412'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoToplevel(Command):
+    @staticmethod
+    def token():
+        return '413'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorWildTopLevel(Command):
+    @staticmethod
+    def token():
+        return '414'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoMotd(Command):
+    @staticmethod
+    def token():
+        return '422'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoNicknameGiven(Command):
+    @staticmethod
+    def token():
+        return '431'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorErroneusNickname(Command):
+    @staticmethod
+    def token():
+        return '432'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNicknameInUse(Command):
+    @staticmethod
+    def token():
+        return '433'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNickCollision(Command):
+    @staticmethod
+    def token():
+        return '436'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorUnavailableResource(Command):
+    @staticmethod
+    def token():
+        return '437'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorUserNotInChannel(Command):
+    @staticmethod
+    def token():
+        return '441'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNotOnChannel(Command):
+    @staticmethod
+    def token():
+        return '442'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorUserOnChannel(Command):
+    @staticmethod
+    def token():
+        return '443'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNeedMoreParams(Command):
+    @staticmethod
+    def token():
+        return '461'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorAlreadyRegistered(Command):
+    @staticmethod
+    def token():
+        return '462'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorKeySet(Command):
+    @staticmethod
+    def token():
+        return '467'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorChannelIsFull(Command):
+    @staticmethod
+    def token():
+        return '471'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorUnknownMode(Command):
+    @staticmethod
+    def token():
+        return '472'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorInviteOnlyChannel(Command):
+    @staticmethod
+    def token():
+        return '473'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorBannedFromChannel(Command):
+    @staticmethod
+    def token():
+        return '474'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorBadChannelKey(Command):
+    @staticmethod
+    def token():
+        return '475'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorBadChannelMask(Command):
+    @staticmethod
+    def token():
+        return '476'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorNoChannelModes(Command):
+    @staticmethod
+    def token():
+        return '477'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorChanOpPrivilegesNeeded(Command):
+    @staticmethod
+    def token():
+        return '482'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorRestricted(Command):
+    @staticmethod
+    def token():
+        return '484'
+    
+    def _receive(self, event):
+        self._client.post_connect()
+
+class ErrorUsersDontMacht(Command):
+    @staticmethod
+    def token():
+        return '502'
+    
+    def _receive(self, event):
+        self._client.post_connect()
