@@ -182,18 +182,25 @@ class Event(object):
         """---------------------------------------------------------------------
         Handle parameters
         ---------------------------------------------------------------------"""
-        if self.parameter == None:
+        if self.parameter == None or len(self.parameter) == 0:
             paramlist = ''
         
         else:
-            for param in self.parameter[:-1]:
-                if ' ' in param:
-                    raise ValueError('only the last parameter may contain spaces')
+            if len(self.parameter) == 1:
+                paramlist = '{0}{1}'.format(SPACECOLON, self.parameter[0])
             
-            if ' ' in self.parameter[-1:1]:
-                paramlist = '{0}{1}{2}{3}'.format(SPACE, SPACE.join(SPACE, self.parameter[:-1]), SPACECOLON, self.parameter[-1:1])
             else:
-                paramlist = '{0}{1}'.format(SPACE, SPACE.join(self.parameter))
+                last = self.parameter[-1:][0]
+                rest = self.parameter[:-1]
+                
+                for param in rest:
+                    if ' ' in param:
+                        raise ValueError('only the last parameter may contain spaces')
+                
+                if ' ' in last:
+                    paramlist = '{0}{1}{2}{3}'.format(SPACE, SPACE.join(rest), SPACECOLON, last)
+                else:
+                    paramlist = '{0}{1}'.format(SPACE, SPACE.join(self.parameter))
             
         message = '{0}{1}{2}'.format(prefix, command, paramlist)
 
