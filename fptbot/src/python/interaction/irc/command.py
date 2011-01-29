@@ -48,7 +48,7 @@ class Command(object):
         
     def receive(self, event):
         self._receive(event)
-        [listener.receive(event) for listener in self._receive_listener]
+        [callback(event) for callback in self._receive_listener]
     
     def send(self, *args):
         self._send(*args)
