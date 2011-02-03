@@ -33,7 +33,7 @@ from os import path
 
 from core.constants import DIR_CONFIG
 
-class Config():
+class Config(object):
     """
     Provide abstract system-wide configuration handling.
     
@@ -48,7 +48,7 @@ class Config():
         """
         
         self._persistence = persistence
-        self._keys  = self._validate(self.defaults())
+        self._keys  = self._validate(self.default_values())
         
         self.load()
         
@@ -67,7 +67,7 @@ class Config():
         result = {}
         
         for key in dict:
-            if key not in self.valid():
+            if key not in self.valid_keys():
                 continue
             
             result[key] = dict[key]
@@ -81,14 +81,14 @@ class Config():
         
         raise NotImplementedError
     
-    def valid(self):
+    def valid_keys(self):
         """
         Return a list representing valid configuration keys.
         """
         
         raise NotImplementedError
     
-    def defaults(self):
+    def default_values(self):
         """
         Return a dictionary with default values. This dictionary
         is validated against the list returned by valid().
