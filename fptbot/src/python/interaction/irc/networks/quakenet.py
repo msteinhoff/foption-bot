@@ -29,14 +29,35 @@ THE SOFTWARE.
 
 __version__ = "$Rev$"
 
-class Quakenet(object):
-    """
-    Implementiert QuakeNet-spezifische funktionen
-    """
-    
-    ' moved auth data to config.py '
+from interaction.irc.channel import Channel
+from interaction.irc.user    import User
 
-    def __init__(self):
-        """ServerMsg("PRIVMSG Q@CServe.quakenet.org :AUTH " + self.Auth + " " + self.Password)"""
-        pass
+from interaction.irc.message import Event
+from interaction.irc.command import Command
+
+class Auth(Command):
+    """
+    Command: AUTH
+    Parameters: <username> <password>
     
+    AUTH command is used to authenticate user with Quakenet Q9 service.
+    """
+    
+    @staticmethod
+    def token():
+        return 'AUTH'
+    
+    def _send(self, username, password):
+        self._client.send_irc(Event(None, self.token(), [username, password]))
+
+class QuakenetChannel(Channel):
+    def findUserByAuth(self, auth):
+        for userObject in self._userlist.values():
+            if userObject.auth == auth:
+                return userObject
+
+        return None
+    pass
+
+class QuakenetUser(User):
+    pass
