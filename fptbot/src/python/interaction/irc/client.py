@@ -26,7 +26,6 @@ THE SOFTWARE.
 @since 06.01.2010
 @author Mario Steinhoff
 """
-
 __version__ = "$Rev$"
 
 from sys      import modules
@@ -37,12 +36,12 @@ from asynchat import async_chat
 from core.messages           import message
 from core.config             import Config
 from interaction.interaction import Interaction
-from interaction.irc.user    import User
-from interaction.irc.message import Message, ClientSource
-from interaction.irc.commands import rfc2812
+from interaction.irc.message import Message
+from interaction.irc.source  import ClientSource
+from interaction.irc.command import *
+from interaction.irc.channel import User
 
-CRLF       = "\x0D\x0A"
-MIRC_COLOR = "\x03"
+CRLF = "\x0D\x0A"
 
 class Client(Interaction, async_chat):
     """
@@ -53,7 +52,7 @@ class Client(Interaction, async_chat):
         def name(self):
             return "interaction.irc"
             
-        def valid(self):
+        def valid_keys(self):
             return [
                 "nickname",
                 "anickname",
@@ -61,17 +60,20 @@ class Client(Interaction, async_chat):
                 "ident",
                 "address",
                 "port",
-                "modules"
+                "modules",
+                "channels",
             ]
         
-        def defaults(self):
+        def default_values(self):
             return {
                 "nickname"  : "Bot-test",
                 "anickname" : "Bot-test-",
                 "realname"  : "Bot",
                 "ident"     : "bot",
                 "address"   : "de.quakenet.org",
-                "port"      : 6667
+                "port"      : 6667,
+                "modules"   : ['usermgmt', 'roll'],
+                "channels"  : ['#test']
             }
 
     def __init__(self, bot):
@@ -83,35 +85,124 @@ class Client(Interaction, async_chat):
         
         Interaction.__init__(self, bot)
         async_chat.__init__(self)
-        self.set_terminator(CRLF)
         
-        self._logger = self._bot.getLogger("interaction.irc")
-        self._config = self.ClientConfig(self._bot.getPersistence())
+        self.set_terminator(CRLF)
         
         self._commands = {}
         self._modules = {}
         
+        self.config = self.ClientConfig(self._bot.getPersistence())
+        self.logger = self._bot.getLogger(self.config.name())
+        
         self.me = User(
             ClientSource(
-                self._config.get('nickname'),
-                self._config.get('ident'),
+                self.config.get('nickname'),
+                self.config.get('ident'),
                 ''
             ),
-            self._config.get('realname')
+            self.config.get('realname')
         )
-        self.channels = []
         
-        rfc2812.register_with_client(self)
-        self.register_module('roll')
+        self.register_commands()
+        self.load_modules()
 
+    """-------------------------------------------------------------------------
+    IRC commands
+    -------------------------------------------------------------------------"""
+    def register_commands(self):
+        """
+        Register default command handlers that implement protocol
+        functionality.
+        """
+        
+        commands = [
+            NickCmd, UserCmd, ModeCmd, QuitCmd,
+            JoinCmd, PartCmd, TopicCmd, NamesCmd, InviteCmd, KickCmd,
+            PrivmsgCmd, NoticeCmd,
+            MotdCmd, WhoCmd, WhoisCmd,
+            PingCmd, PongCmd,
+            WelcomeReply, YourHostReply, CreatedReply, MyInfoReply, BounceReply,
+            MotdStartReply, MotdReply, MotdEndReply,
+            AwayReply, UniqueOpIsReply, ChannelModeIsReply, InvitingReply,
+            TopicReply, NoTopicReply,
+            WhoisUserReply, WhoisServerReply, WhoisOperatorReply,
+            WhoisIdleReply, WhoisChannelsReply, WhoisEndReply,
+            WhoReply, WhoEndReply,
+            NamesReply, NamesEndReply,
+            BanListReply, BanListEndReply,
+            InviteListReply, InviteListEndReply,
+            ExceptListReply, ExceptListEndReply
+        ]
+        
+        for command in commands:
+            self.register_command(command)
+    
+    def register_command(self, command):
+        """
+        Register a command handler.
+        
+        The command will be registered by it's token. If a command with
+        the same token already exists, it will be overwritten.
+        
+        @param command: A pointer to the handler class.
+        """
+
+        instance = command(self)
+        
+        self._commands[instance.token()] = instance
+    
+    def get_command(self, command):
+        """
+        Get a command handler.
+        
+        @param command: A pointer to the handler class.
+        """
+        return self._commands[command.token()]
+    
+    def unregister_command(self, command):
+        """
+        Remove a command handler.
+        
+        @param command: A pointer to the handler class.
+        """
+        del self._commands[command.token()]
+            
+    def send_command(self, command, *parameters):
+        """
+        Send a command.
+        
+        @param command: A pointer to the handler class.
+        @param parameters: The command parameters.
+        """
+        
+        self._commands[command.token()].send(*parameters)
+    
     """-------------------------------------------------------------------------
     Modules
     -------------------------------------------------------------------------"""
-    def register_module(self, name):
+    def load_modules(self):
         """
-        Load a module that extends the client's functionality.
+        Load all configured modules.
+        """
+        for module in self.config.get('modules'):
+            self.load_module(module)
+    
+    def load_module(self, name):
+        """
+        Load a client module that extends the client's functionality.
         
-        @param name: The name of the module that should be registered
+        This will import a python module located in interaction.irc.modules
+        using python's __import__ builtin.
+        
+        The class that contains all the module logic must be named after
+        the module name and must be in CamelCase.
+        
+        If the import was successful, the class is instanciated and its
+        receive listeners are registered with all commands currently known.
+        
+        @param name: The name of the module that should be loaded.
+        
+        @return The module object.
         """
         
         moduleName = 'interaction.irc.modules.{0}'.format(name)
@@ -124,8 +215,10 @@ class Client(Interaction, async_chat):
         
         self._modules[name] = clazz(self)
         
-        for command, listener in self._modules[name].receive_listener().items():
+        for command, listener in self._modules[name].get_receive_listeners().items():
             self.get_command(command).add_receive_listener(listener)
+            
+        return module
             
         
     def get_module(self, name):
@@ -140,64 +233,6 @@ class Client(Interaction, async_chat):
         return self._modules[name]
         
     """-------------------------------------------------------------------------
-    IRC commands
-    -------------------------------------------------------------------------"""
-    def register_command(self, clazz):
-        """
-        Register a command handler.
-        
-        @param clazz: A pointer to the handler class.
-        """
-        
-        instance = clazz(self)
-        
-        self._commands[instance.token()] = instance
-    
-    def get_command(self, clazz):
-        """
-        Get a command handler.
-        
-        @param clazz: A pointer to the handler class.
-        """
-        return self._commands[clazz.token()]
-    
-    def send_command(self, clazz, *parameters):
-        """
-        Send a command.
-        
-        @param clazz: A pointer to the handler class.
-        @param parameters:
-        """
-        
-        if clazz.token() not in self._commands:
-            return
-        
-        self._commands[clazz.token()].send(*parameters)
-        
-    def unregister_command(self, clazz):
-        """
-        Remove a command handler.
-        
-        @param clazz: A pointer to the handler class.
-        """
-        del self._commands[clazz.token()]
-            
-    
-    """-------------------------------------------------------------------------
-    Channel
-    -------------------------------------------------------------------------"""
-    def get_channel(self, name):
-        """
-        Return a channel object.
-        
-        @param name: The name of the channel that should be returned.
-        @return The channel instance.
-        @raise KeyError if there is no such channel
-        """
-        return self.channels[name]
-        
-    
-    """-------------------------------------------------------------------------
     Connection handling
     -------------------------------------------------------------------------"""
     def start(self):
@@ -206,27 +241,26 @@ class Client(Interaction, async_chat):
         
         This method creates a streaming socket, connects to the IRC
         server defined in the local Config-object and starts the
-        asyncore event loop.  
+        asyncore event loop.
         """
         
-        self._logger.info(message[20001], {
-            'address' : self._config.get('address'),
-            'port'    : self._config.get('port')
+        self.logger.info(message[20001], {
+            'address' : self.config.get('address'),
+            'port'    : self.config.get('port')
         })
         
         try:
-            self.pre_connect()
-            
             self.create_socket(AF_INET, SOCK_STREAM)
-            self.connect((self._config.get('address'), self._config.get('port')))
+            self.connect((self.config.get('address'), self.config.get('port')))
             
             self._buffer = []
             
             loop()
+            
         except:
             """TODO: check which exceptions are caught here
             """
-            self._logger.info.error(message[20002])
+            self.logger.info.error(message[20002])
 
     def stop(self):
         """
@@ -236,7 +270,7 @@ class Client(Interaction, async_chat):
         queued messages were sent.
         """
         
-        self._logger.info(message[20003])
+        self.logger.info(message[20003])
         
         self.pre_disconnect()
         
@@ -247,32 +281,49 @@ class Client(Interaction, async_chat):
     -------------------------------------------------------------------------"""
     def pre_connect(self):
         """
-        This trigger is called before the socket is created.
+        This trigger is called after the socket is opened.
+        
+        It will send the USER and NICK commands according to the RFC.
+        The parameters are retrieved from the local Config-Object.
+        
+        As this method is only called once, error conditions such as
+        nickname in use are catched and handled by high-level IRC commands.
         """
-        pass
+        
+        self.logger.info("Registering connection, Nickname: {0}, Realname: {1}, Ident: {2}".format(self.me.source.nickname, self.me.realname, self.me.source.ident))
+        
+        self.send_command(NickCmd, self.me.source.nickname)
+        self.send_command(UserCmd, self.me.source.ident, self.me.realname)
     
     def post_connect(self):
         """
-        This trigger is called after the MOTD was received.
+        This trigger is called after the MOTD or the NoMotdError was
+        received.
         """
-        self.send_command(rfc2812.Join, ['#test'])
+        
+        self.logger.info("Connected to server.")
+        self.logger.info("Joining channels: {0}".format(self.config.get('channels')))
+        
+        self.send_command(JoinCmd, self.config.get('channels'))
     
     def pre_disconnect(self):
         """
         This trigger is called before the connection will be closed.
         """
-        pass
+        
+        self.send_command(QuitCmd)
         
     def post_disconnect(self):
         """
         This trigger is called after the connection was closed.
         """
+        
         pass
 
     """-------------------------------------------------------------------------
-    Communication interface
+    Low-level communication
     -------------------------------------------------------------------------"""
-    def receive_irc(self, event):
+    def receive_event(self, event):
         """
         Handle all incoming IRC events.
         
@@ -284,17 +335,14 @@ class Client(Interaction, async_chat):
         @param event: A event instance with the message data.
         """
         
-        self._logger.info('Received: <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))        
+        self.logger.info('Received: <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))
         
-        if event.command in self._commands:
-            self._commands[event.command].receive(event)
+        if event.command not in self._commands:
+            return
         
-        """
-        if event.command == '376':
-            self.post_connect()
-        """
-
-    def send_irc(self, event):
+        self._commands[event.command].receive(event)
+        
+    def send_event(self, event):
         """
         Handle all outgoing IRC events.
         
@@ -307,7 +355,7 @@ class Client(Interaction, async_chat):
         
         message = event.create_message()
         
-        self._logger.info("Sent:     <{0}> {1}: {2}".format(event.source, event.command, event.parameter))
+        self.logger.info("Sent:     <{0}> {1}: {2}".format(event.source, event.command, event.parameter))
         
         self.push("{0}{1}".format(message, CRLF))
         
@@ -319,25 +367,19 @@ class Client(Interaction, async_chat):
         Send IRC specific commands when connecting.
         
         This method is called by asyncore after the first read or write
-        event occured and will send the USER and NICK commands
-        according to the RFC. The parameters are retrieved from the
-        local Config-Object.
-        
-        As this method is only called once, error conditions such as
-        nickname in use are catched and handled by receive_irc().
+        event occured and will call the pre_connect hook.
         """
         
-        self.send_command(rfc2812.Nick, self.me.source.nickname)
-        self.send_command(rfc2812.User, self.me.source.ident, self.me.realname)
+        self.pre_connect()
         
     def handle_close(self):
         """
-        Send IRC specific commands when disconnecting.
-        
-        TODO: sending quit does not work, check why
+        Close socket after connection is closed.
         """
         
-        #self.send_command(rfc2812.Quit(), "i did it for the lulz mkay")
+        self.close()
+        
+        self.post_disconnect()
 
     """-------------------------------------------------------------------------
     Implementation of asynchat methods 
@@ -362,7 +404,7 @@ class Client(Interaction, async_chat):
         buffer and reset the buffer. Then the IRC message separator
         characters are removed from the end of the line. The message
         will be parsed into an Event object with the content of the
-        message cleanly separated. Finally, receive_irc() is called,
+        message cleanly separated. Finally, receive_event() is called,
         where the message can be further dispatched.
         """
         
@@ -381,4 +423,4 @@ class Client(Interaction, async_chat):
         
         message = Message(data)
         
-        self.receive_irc(message.create_event())
+        self.receive_event(message.create_event())
