@@ -86,7 +86,7 @@ class Message(object):
             source, result = split(result[1:], SPACE, 1)
             
             """when source contains a EXMARK we assume that source is not a
-            servername, because ! are not allowed in ip addresses or
+            servername, because EXMARK are not allowed in ip addresses or
             dns names."""
             
             if EXMARK in source:
@@ -182,25 +182,27 @@ class Event(object):
         """---------------------------------------------------------------------
         Handle parameters
         ---------------------------------------------------------------------"""
-        if self.parameter == None or len(self.parameter) == 0:
+        if self.parameter == None:
+            paramlist = ''
+            
+        elif len(self.parameter) == 0:
             paramlist = ''
         
-        else:
-            if len(self.parameter) == 1:
+        elif len(self.parameter) == 1:
                 paramlist = '{0}{1}'.format(SPACECOLON, self.parameter[0])
             
+        else:
+            rest = self.parameter[:-1]
+            last = self.parameter[-1:][0]
+            
+            for param in rest:
+                if SPACE in param:
+                    raise ValueError('only the last parameter may contain spaces')
+            
+            if SPACE in last:
+                paramlist = '{0}{1}{2}{3}'.format(SPACE, SPACE.join(rest), SPACECOLON, last)
             else:
-                last = self.parameter[-1:][0]
-                rest = self.parameter[:-1]
-                
-                for param in rest:
-                    if ' ' in param:
-                        raise ValueError('only the last parameter may contain spaces')
-                
-                if ' ' in last:
-                    paramlist = '{0}{1}{2}{3}'.format(SPACE, SPACE.join(rest), SPACECOLON, last)
-                else:
-                    paramlist = '{0}{1}'.format(SPACE, SPACE.join(self.parameter))
+                paramlist = '{0}{1}'.format(SPACE, SPACE.join(self.parameter))
             
         message = '{0}{1}{2}'.format(prefix, command, paramlist)
 
