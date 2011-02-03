@@ -46,10 +46,10 @@ class Bot(object):
         def name(self):
             return "core.bot"
             
-        def valid(self):
+        def valid_keys(self):
             return []
         
-        def defaults(self):
+        def default_values(self):
             return {}
 
     def __init__(self):
