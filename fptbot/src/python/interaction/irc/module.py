@@ -84,6 +84,15 @@ class InteractiveModule(Module):
     Parameters can be defined for commands and sub-commands.
     """
     
+    class Matcher(object):
+        def __init__(self, command, parameter):
+            pattern = r'\{}{} {}'.format(COMMAND_TOKEN, command, parameter)
+            
+            self.regex = re.compile(pattern, re.I)
+            
+        def match(self, data):
+            return self.regex.findall(data)[0]
+    
     def __init__(self, client):
         Module.__init__(self, client)
         
@@ -99,7 +108,21 @@ class InteractiveModule(Module):
             
             self.tokens[token] = re.compile(pattern, re.I)
         """
-        pass
+        
+        self.keywords = {}
+        
+        parameter_map = self.parameter_mapping()
+        
+        for key_name, key_map in self.command_keywords().items():
+            matcher = self.Matcher(key_name, parameter_map[key_name])
+            self.keywords[key_name] = (matcher, key_map[0]) 
+        
+            if len(key_map) > 1:
+                for subkey_name, callback in key_map[1].items():
+                
+                    matcher = self.Matcher(subkey_name, parameter_map[subkey_name])
+                
+                    self.keywords[subkey_name] = (matcher, callback) 
     
     def module_identifier(self):
         """
@@ -120,9 +143,9 @@ class InteractiveModule(Module):
         must be given without the control character.
         
         Examples:
-        {'roll'}
-        {'black', 'white', 'pink'}
-        {'calendar': ['add', 'delete']}
+        {'roll': (callback)}
+        {'black': (callback), 'white': (callback), 'pink': (callback)}
+        {'calendar': (callback, {'add': callback, 'delete': callback})}
         
         @return A dictionary with the command/sub-command keywords.
         """
@@ -135,7 +158,8 @@ class InteractiveModule(Module):
         sub-commands.
         
         Example:
-        {'roll': r'([\d]+)(?:-([\d]+))?$'}
+        {('roll'): r'([\d]+)(?:-([\d]+))?$'}
+        {('calendar', 'add'): r'([\d]+)(?:-([\d]+))?$'}
         """
         
         raise NotImplementedError
@@ -155,6 +179,9 @@ class InteractiveModule(Module):
         
         if event.command not in (PrivmsgCmd.token(), NoticeCmd.token()):
             return
+        
+        for token, params in self.keywords:
+            
         
         target, message = event.parameter[0:2]
         
