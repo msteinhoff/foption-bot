@@ -33,50 +33,51 @@ __version__ = "$$"
 import re
 import random
 
-from interaction.irc.module import Module
-from interaction.irc.commands.rfc2812 import Privmsg
+from interaction.irc.module import InteractiveModule
+from interaction.irc.command import Privmsg
 
-class Roll(Module):
+class Roll(InteractiveModule):
     '''
     random roll 1-X
     '''
     
     def receive_listener(self):
         return {
-            Privmsg: self.privmsg
+            Privmsg: self.parse
         }
     
-    def privmsg(self, event):
-        target, message = event.parameter[0:2]
-        
-        if not message.startswith('.roll'):
-            return
+    def command_mapping(self):
+        return {'roll': self.roll}
+    
+    def parameter_mapping(self):
+        return {'roll': r'^([\d]+)(?:-([\d]+))?$'}
+    
+    def roll(self, event, command, parameter):
+        target = event.parameter[0]
         
         try:
-            message = re.findall(r'.roll ([\d]+)(?:-([\d]+))?$', message)[0]
+            min = int(parameter[0])
+            max = int(parameter[1])
+        except KeyError:
+            min = 1
+            max = int(parameter[0])
+    
+        if max > 0 and max >= min:
+            result = random.randint(min, max)
             
-            if message[1]:
-                min = int(message[0])
-                max = int(message[1])
-            else:
-                min = 1
-                max = int(message[0])
-        
-            if max > 0 and max >= min:
-                result = random.randint(min, max)
-                
-                reply = "{0} has rolled: {1} ({2}-{3})".format(
-                    event.source.nickname,
-                    result,
-                    min,
-                    max
-                )
-        except IndexError, ValueError:
-            reply = "usage: .roll zahl[-zahl]"
-        
-        
+            reply = "{0} has rolled: {1} ({2}-{3})".format(
+                event.source.nickname,
+                result,
+                min,
+                max
+            )
+    
         reply = "Rollapparillo: {0}".format(reply)
         
-        print reply
-            
+        self._client.send_command(Privmsg, target, reply)
+
+    def invalid_parameters(self, event, command):
+        target = event.parameter[0]
+        reply = "usage: .roll zahl[-zahl]"
+        
         self._client.send_command(Privmsg, target, reply)
