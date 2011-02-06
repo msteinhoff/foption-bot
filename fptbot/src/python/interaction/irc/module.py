@@ -33,7 +33,6 @@ import re
 
 from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
-COMMAND_TOKEN = '.'
 MIRC_COLOR = "\x03"
 
 class Module(object):
@@ -56,6 +55,10 @@ class Module(object):
         """
         
         self.client = client
+        self.initialize()
+        
+    def __del__(self):
+        self.shutdown()
 
     def get_receive_listeners(self):
         """
@@ -68,6 +71,12 @@ class Module(object):
         @return list with mapping between commands and class methods   
         """
         raise NotImplementedError
+    
+    def initialize(self):
+        pass
+    
+    def shutdown(self):
+        pass
 
 class InteractiveModule(Module):
     """
@@ -84,45 +93,35 @@ class InteractiveModule(Module):
     Parameters can be defined for commands and sub-commands.
     """
     
-    class Matcher(object):
-        def __init__(self, command, parameter):
-            pattern = r'\{}{} {}'.format(COMMAND_TOKEN, command, parameter)
-            
-            self.regex = re.compile(pattern, re.I)
-            
-        def match(self, data):
-            return self.regex.findall(data)[0]
+    COMMAND_TRIGGER = '.'
+    PATTERN_BASE = r'^\{0}(?P<command>{1})(\s(?P<parameter>.+)$|$)'
+    PATTERN_SEPARATOR = '|'
     
     def __init__(self, client):
+        """
+        Initialize the Inactive Module.
+        
+        Generate and compile a command regex pattern to match all
+        defined commands. Compile all parameter regex patterns.
+        
+        Cache all compiled RegexObjects and the mapping between
+        commands and callback functions.
+        """
+        
         Module.__init__(self, client)
         
-        """
-        TODO pre-compile optimized regular expressions for every
-        command/parameter pair.
-        """
+        self.command_map = self.command_mapping()
         
-        """
-        for prefix, regex in self.valid_commands().items():
-            token = '{0}{1}'.format(COMMAND_TOKEN, prefix)
-            pattern = r'\{0}{1} {2}'.format(COMMAND_TOKEN, prefix, regex)
-            
-            self.tokens[token] = re.compile(pattern, re.I)
-        """
+        regex = self.PATTERN_BASE.format(
+            self.COMMAND_TRIGGER,
+            self.PATTERN_SEPARATOR.join(self.command_map)
+        )
         
-        self.keywords = {}
+        self.command_re = re.compile(regex, re.I)
         
-        parameter_map = self.parameter_mapping()
-        
-        for key_name, key_map in self.command_keywords().items():
-            matcher = self.Matcher(key_name, parameter_map[key_name])
-            self.keywords[key_name] = (matcher, key_map[0]) 
-        
-            if len(key_map) > 1:
-                for subkey_name, callback in key_map[1].items():
-                
-                    matcher = self.Matcher(subkey_name, parameter_map[subkey_name])
-                
-                    self.keywords[subkey_name] = (matcher, callback) 
+        self.parameter_re = []
+        for command, parameter_pattern in self.parameter_mapping().items():
+            self.parameter_re[command] = re.compile(parameter_pattern, re.I)
     
     def module_identifier(self):
         """
@@ -135,17 +134,20 @@ class InteractiveModule(Module):
         
         raise NotImplementedError
     
-    def command_keywords(self):
+    def command_mapping(self):
         """
-        Return a dictionary with a command/sub-command keywords.
+        Return a definition of commands/sub-commands and callbacks.
         
-        The module will respond on every keyword defined. The keywords
-        must be given without the control character.
+        The module will respond on every command defined. The commands
+        must be given without the trigger character.
+        
+        Sub-commands are defined as ordinary commands separated by a
+        space (0x20) character.
         
         Examples:
-        {'roll': (callback)}
-        {'black': (callback), 'white': (callback), 'pink': (callback)}
-        {'calendar': (callback, {'add': callback, 'delete': callback})}
+        {'roll': callback}
+        {'black': callback, 'white': callback, 'pink': callback}
+        {'calendar add': callback, 'calendar delete': callback}
         
         @return A dictionary with the command/sub-command keywords.
         """
@@ -158,8 +160,8 @@ class InteractiveModule(Module):
         sub-commands.
         
         Example:
-        {('roll'): r'([\d]+)(?:-([\d]+))?$'}
-        {('calendar', 'add'): r'([\d]+)(?:-([\d]+))?$'}
+        {'roll': r'^([\d]+)(?:-([\d]+))$'}
+        {'calendar add': r'^([\d]+)(?:-([\d]+))?$'}
         """
         
         raise NotImplementedError
@@ -168,11 +170,19 @@ class InteractiveModule(Module):
         """
         Parse the event and dispatch it to the actual module logic.
         
-        This will do basic preparation work that is needed in every
-        module, e.g. removing the module prefix, extracting parameters,
-        etc.
+        This will check if any module command was found in the message.
         
-        This module will only accept Privmsg or Notice events.
+        If no command was found, the method will return.
+        
+        If a command was found, the corresponding parameter RegexObject
+        is retrieved and matched against the parameter raw data. If no
+        RegexObject was found, the parameter data will be None.
+        
+        Then, the command's callback will be called with command and
+        parameter data passed as arguments.
+        
+        This module will only accept Privmsg or Notice events. It needs
+        to be activated in get_receive_listeners().
         
         @param event: The Privmsg or Notice event.
         """
@@ -180,59 +190,47 @@ class InteractiveModule(Module):
         if event.command not in (PrivmsgCmd.token(), NoticeCmd.token()):
             return
         
-        for token, params in self.keywords:
-            
+        message = event.parameter[1]
         
-        target, message = event.parameter[0:2]
+        message_match = self.command_re.search(message)
         
-        """
-        for command, pattern_object in self.prefixes:
-            if message.startswith(token):
-                found_command = token
-                found_parameter = pattern_object.findall(message)
-                break
-    
-        """
+        if message_match is None:
+            return
+        
+        command = message_match.group('command')
+        parameter = message_match.group('parameter')
         
         try:
-            self.handle_valid(event, target, message[0])
+            parameter_match = self.parameter_re[command].findall(parameter)
+            
+            try:
+                parameter = parameter_match[0]
+            except KeyError:
+                self.invalid_parameters(event, command)
+                return
+        
+        except KeyError:
+            parameter = None
+        
+        callback = self.command_map[command]
+        
+        try:
+            callback(event, command, parameter_match)
             
         except Exception as ex:
-            self.handle_invalid(event, target, ex)
-            
-        except:
             """
             Should not happen, but just in case.
             
             TODO: throw stack trace
             """
-            self.client.logger.error('Unhandled exception thrown in {0}'.format(self.__class__.__name__))
-
-    def handle_valid(self, event, target, parameters):
-        """
-        Process input when the parameters are valid.
-        
-        This implements the actual module logic.
-        
-        @param event: A Privmsg or Notice event.
-        @param target: The target entity (nickname or channel).
-        @param parameters: The parsed command parameters.
-        """
-        
-        raise NotImplementedError
+            
+            self.client.logger.error('Unhandled exception {1} thrown in {0}'.format(
+                self.__class__.__name__,
+                str(ex)
+            ))
     
-    def handle_invalid(self, event, target, ex):
-        """
-        Process input when the parameters are invalid.
-        
-        This implements error conditions.
-        
-        @param event: A Privmsg or Notice event.
-        @param target: The target entity (nickname or channel).
-        @param ex: The exception instance.
-        """
-        
-        raise NotImplementedError
+    def invalid_parameters(self, event, command):
+        pass
     
     def send_reply(self, command, target, reply):
         """
@@ -243,8 +241,9 @@ class InteractiveModule(Module):
         either a nickname or a channel.
         
         TODO: add mirc color codes
+        TODO: fallback to privmsg instead of raising exception?
         
-        @param command: The command type.
+        @param command: The reply type.
         @param target: The target to send the reply to.
         @param reply: The reply string to send.
         """
@@ -252,6 +251,6 @@ class InteractiveModule(Module):
         if command.token() not in (PrivmsgCmd.token(), NoticeCmd.token()):
             raise ValueError('only Privmsg or Notice are valid commands')
         
-        reply = '{0}: {1}'.format(self.module_identifier(), reply)
+        reply = '{}: {}'.format(self.module_identifier(), reply)
         
         self.client.send_command(command, target, reply)
