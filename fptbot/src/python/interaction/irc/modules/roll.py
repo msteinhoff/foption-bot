@@ -30,11 +30,10 @@ THE SOFTWARE.
 
 __version__ = "$$"
 
-import re
 import random
 
 from interaction.irc.module import InteractiveModule
-from interaction.irc.command import Privmsg
+from interaction.irc.command import PrivmsgCmd
 
 class Roll(InteractiveModule):
     '''
@@ -43,8 +42,11 @@ class Roll(InteractiveModule):
     
     def receive_listener(self):
         return {
-            Privmsg: self.parse
+            PrivmsgCmd: self.parse
         }
+    
+    def module_identifier(self):
+        return 'Rollapparillo'
     
     def command_mapping(self):
         return {'roll': self.roll}
@@ -71,13 +73,11 @@ class Roll(InteractiveModule):
                 min,
                 max
             )
-    
-        reply = "Rollapparillo: {0}".format(reply)
         
-        self._client.send_command(Privmsg, target, reply)
+        self.send_reply(PrivmsgCmd, target, reply)
 
     def invalid_parameters(self, event, command):
         target = event.parameter[0]
         reply = "usage: .roll zahl[-zahl]"
         
-        self._client.send_command(Privmsg, target, reply)
+        self.send_reply(PrivmsgCmd, target, reply)
