@@ -32,7 +32,7 @@ __version__ = "$$"
 
 import random
 
-from interaction.irc.module import InteractiveModule
+from interaction.irc.module import InteractiveModule, Location, Role
 from interaction.irc.command import PrivmsgCmd
 
 class Roll(InteractiveModule):
@@ -40,27 +40,22 @@ class Roll(InteractiveModule):
     random roll 1-X
     '''
     
-    def receive_listener(self):
-        return {
-            PrivmsgCmd: self.parse
-        }
-    
     def module_identifier(self):
         return 'Rollapparillo'
     
-    def command_mapping(self):
-        return {'roll': self.roll}
+    def init_commands(self):
+        self.add_command('roll',     r'^([\d]+)(?:-([\d]+))?$', Location.CHANNEL, Role.USER,  self.roll)
+        self.add_command('rollqry',  None,                      Location.QUERY,   Role.USER,  self.rollquery)
+        self.add_command('rollboth', None,                      Location.BOTH,    Role.USER,  self.rollboth)
+        self.add_command('rolladm',  None,                      Location.QUERY,   Role.ADMIN, self.rolladmin)
     
-    def parameter_mapping(self):
-        return {'roll': r'^([\d]+)(?:-([\d]+))?$'}
-    
-    def roll(self, event, command, parameter):
-        target = event.parameter[0]
+    def roll(self, event, location, command, parameter):
+        target = self.get_target(location, event)
         
-        try:
+        if parameter[1]:
             min = int(parameter[0])
             max = int(parameter[1])
-        except KeyError:
+        else:
             min = 1
             max = int(parameter[0])
     
@@ -75,9 +70,25 @@ class Roll(InteractiveModule):
             )
         
         self.send_reply(PrivmsgCmd, target, reply)
+        
+    def rollquery(self, event, location, command, parameter):
+        target = self.get_target(location, event)
+        
+        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als user im query')
 
-    def invalid_parameters(self, event, command):
+    def rollboth(self, event, location, command, parameter):
+        target = self.get_target(location, event)
+        
+        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als user im chan und query')
+
+    def rolladmin(self, event, location, command, parameter):
+        target = self.get_target(location, event)
+        
+        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als admin im query')
+
+    def invalid_parameters(self, event, location, command, parameter):
         target = event.parameter[0]
+        
         reply = "usage: .roll zahl[-zahl]"
         
         self.send_reply(PrivmsgCmd, target, reply)
