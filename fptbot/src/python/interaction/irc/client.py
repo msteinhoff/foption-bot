@@ -26,12 +26,14 @@ THE SOFTWARE.
 @since 06.01.2010
 @author Mario Steinhoff
 """
+
 __version__ = "$Rev$"
 
-from sys      import modules
-from socket   import AF_INET, SOCK_STREAM
-from asyncore import loop
-from asynchat import async_chat
+from sys       import modules
+from traceback import print_exc
+from socket    import AF_INET, SOCK_STREAM
+from asyncore  import loop
+from asynchat  import async_chat
 
 from core.messages           import message
 from core.config             import Config
@@ -340,7 +342,11 @@ class Client(Interaction, async_chat):
         if event.command not in self._commands:
             return
         
-        self._commands[event.command].receive(event)
+        try:
+            self._commands[event.command].receive(event)
+        except:
+            print_exc()
+            
         
     def send_event(self, event):
         """
@@ -417,7 +423,7 @@ class Client(Interaction, async_chat):
         at call-time. If there is more than one element/message in the
         buffer, everthing could get screwed really hard.
         
-        TODO: find better way to do this
+        FIXME: find better way to do this
         """
         data = "".join([line.strip(CRLF) for line in data])
         
