@@ -39,6 +39,8 @@ SPACECOLON = "\x20\x3A"
 EXMARK     = "\x21"
 AT         = "\x40"
 
+CHANNEL_TOKEN = '\x23'
+
 class Message(object):
     """
     A IRC message in plaintext.
