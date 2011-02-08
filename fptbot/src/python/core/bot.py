@@ -99,7 +99,10 @@ class Bot(object):
         self.getLogger().info("starting the system")
         
         for name, object in self._interaction.items():
-            self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
+            #self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
+            #self._processes[name].start()
+            
+            self._processes[name] = object(self)
             self._processes[name].start()
         
         self.getLogger().info("startup completed")
