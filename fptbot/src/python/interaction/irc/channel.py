@@ -27,9 +27,7 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-class Privilege(object):
-    USER = 1
-    ADMIN = 2
+from interaction.irc.module import Role
 
 class Channellist(object):
     """
@@ -141,7 +139,7 @@ class Userlist(object):
     
     def request(self, source, realname=''):
         try:
-            return self.get(source.nickname)
+            return self.get(source)
         
         except KeyError:
             user = User(source, realname)
@@ -318,17 +316,17 @@ class User(object):
         Each module can have independent information on a per-user
         basis.
         
-        @param module: The module class.
+        @param module: The module name.
         @param information: Any python object.
         """
         
-        self.information[module.__class__.__name__] = information
+        self.information[module] = information
     
     def getInfo(self, module):
         """
         Retrieve module-specific information.
         
-        @param module: The module class.
+        @param module: The module name.
         """
         
-        return self.information[module.__class__.__name__]
+        return self.information[module]
