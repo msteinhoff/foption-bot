@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,6 +28,8 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+__version__ = '$Rev$'
+
 from interaction.irc.module import Role
 
 class Channellist(object):
@@ -46,7 +49,15 @@ class Channellist(object):
         """
         Initialize the channel list.
         """
+        
         self.channels = {}
+    
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+        
+        return 'Channellist(Channels={0})'.format('|'.join(self.channels))
     
     def add(self, channel):
         """
@@ -56,6 +67,7 @@ class Channellist(object):
         
         @param channel: A channel object.
         """
+        
         self.channels[channel.name] = channel
     
     def get(self, name):
@@ -68,11 +80,12 @@ class Channellist(object):
         
         @raise KeyError If the channel does not exist.
         """
+        
         return self.channels[name]
     
     def request(self, name):
         """
-        Request a channel from the channel list.
+        Request a channel from the channel list by name.
         
         If the channel does not exist, it will be created and returned.
         
@@ -80,6 +93,7 @@ class Channellist(object):
         
         @return A channel object.
         """
+        
         try:
             return self.get(name)
         
@@ -98,6 +112,7 @@ class Channellist(object):
         
         @raise KeyError If the channel does not exist.
         """
+        
         del self.channels[name]
         
 class Userlist(object):
@@ -116,6 +131,13 @@ class Userlist(object):
         """
         
         self.users = {}
+        
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+
+        return 'Userlist(Users={0})'.format('|'.join(self.users))
     
     def add(self, user):
         """
@@ -123,6 +145,7 @@ class Userlist(object):
         
         @param user: The user object.
         """
+        
         self.users[user.source.nickname] = user
     
     def get(self, source):
@@ -135,9 +158,20 @@ class Userlist(object):
         
         @raise KeyError if no such user was found.
         """
+        
         return self.users[source.nickname]
     
     def request(self, source, realname=''):
+        """
+        Request a user from the user list by source.
+        
+        If the user object does not exist, it will be created and returned.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        """
+        
         try:
             return self.get(source)
         
@@ -186,29 +220,56 @@ class Channel(object):
     A channel entity.
     """
     
+    MODE_OP    = 1
+    MODE_VOICE = 2
+    
     def __init__(self, name):
         """
         Initialize a channel.
         """
+        
         self.name = name
-        self.topic = ""
+        self.topic = ''
         self.modes = []
         self.banlist = []
         self.invitelist = []
         self.users = {}
         
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+        
+        return 'Channel(Name={0},Users={1})'.format(self.name, '|'.join(self.users))
+        
     def getModes(self):
+        """
+        Yeah, what to do here? do we need this actually?
+        """
+        
         pass
     
-    def addUser(self, user):
+    def addUser(self, user, mode=None):
         """
         Add a user object to the channel.
         The user object is notified about being added to the channel. 
         
         @param user: The user object.
+        @param mode: The user mode in the channel.
         """
-        self.users[user.source.nickname] = user
-        user.addChannel(self.name)
+        
+        self.users[user.source.nickname] = (user, mode)
+        user.addChannel(self)
+        
+    def updateUserMode(self, nickname, mode):
+        """
+        Updates the user mode.
+        
+        @param nickname: The nickname of the user.
+        @param mode: The new user mode.
+        """
+        
+        self.users[nickname] = (self.getUser(nickname), mode)
         
     def getUser(self, nickname):
         """
@@ -216,7 +277,17 @@ class Channel(object):
         
         @param nickname: The nickname of the user object.
         """
-        return self.users[nickname]
+        
+        return self.users[nickname][0]
+    
+    def getUserList(self):
+        """
+        Return the current user list of the channel.
+        
+        @return The user list.
+        """
+        
+        return self.users
     
     def renameUser(self, current_nickname, new_nickname):
         """
@@ -242,25 +313,53 @@ class Channel(object):
         @param nickname: The nickname of the user.
         """
         
-        self.users[nickname].removeChannel(self.name)
+        self.users[nickname].removeChannel(self)
         del self.users[nickname]
 
 class User(object):
-    AWAY         = "a"
-    INVISIBLE    = "i"
-    WALLOPS      = "w"
-    RESTRICTED   = "r"
-    OPER         = "o"
-    LOCALOPER    = "O"
-    SERVERNOTICE = "s"
+    AWAY         = 'a'
+    INVISIBLE    = 'i'
+    WALLOPS      = 'w'
+    RESTRICTED   = 'r'
+    OPER         = 'o'
+    LOCALOPER    = 'O'
+    SERVERNOTICE = 's'
     
     def __init__(self, source, realname):
+        """
+        Initialize the user.
+        
+        @param source: The Source object.
+        @param realname: The realname of the user.
+        """
+        
         self.source   = source
         self.realname = realname
         self.channels = []
         self.information = {}
         
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+
+        return 'User(Nickname={0},Ident={1},Host={2},Realname={3},Channels={4})'.format(
+            self.source.nickname,
+            self.source.ident,
+            self.source.host,
+            self.realname,
+            '|'.join(self.channels)
+        )
+        
     def rename(self, new_nickname):
+        """
+        Rename the user.
+        
+        Notify all channels the user and bot have in common.
+        
+        @param new_nickname: The user's new nickname.
+        """
+        
         for channel in self.channels:
             channel.renameUser(self.source.nickname, new_nickname)
         
@@ -282,6 +381,10 @@ class User(object):
         self.channels.append(channel)
         
     def getChannels(self):
+        """
+        Return a list of all channels that user and bot have in common.
+        """
+        
         return self.channels
     
     def removeChannel(self, channel):
