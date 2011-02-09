@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,17 +28,17 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from string import split
 
 from interaction.irc.source import Source, ServerSource, ClientSource
 
-SPACE      = "\x20"
-COLON      = "\x3A"
-SPACECOLON = "\x20\x3A"
-EXMARK     = "\x21"
-AT         = "\x40"
+SPACE      = '\x20'
+COLON      = '\x3A'
+SPACECOLON = '\x20\x3A'
+EXMARK     = '\x21'
+AT         = '\x40'
 
 CHANNEL_TOKEN = '\x23'
 

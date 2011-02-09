@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,7 +28,7 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from interaction.irc.message import Event
 
@@ -173,6 +174,7 @@ class NickCmd(Command):
         """
         Update the client's identity with the current nickname.
         """
+        
         if event.source.nickname == self.client.me.source.nickname:
             self.client.me.rename(event.parameter[0])
     
@@ -180,6 +182,7 @@ class NickCmd(Command):
         """
         Send a request to set/change the client's nickname.
         """
+        
         self.client.send_event(Event(None, self.token(), [nickname]))
 
 class UserCmd(Command):
@@ -212,6 +215,7 @@ class UserCmd(Command):
         """
         Register with the IRC server.
         """
+        
         self.client.send_event(Event(None, self.token(), [ident, '0', '*', '{0}'.format(realname)]))
 
 
@@ -312,6 +316,7 @@ class QuitCmd(Command):
         
         @param message: The quit message.
         """
+        
         parameter = []
         
         if message is not None:
@@ -392,7 +397,7 @@ class JoinCmd(Command):
         """
         
         if channels is None:
-            parameter = ["0"]
+            parameter = ['0']
         
         else:
             parameter = [','.join(channels)]
@@ -473,6 +478,7 @@ class TopicCmd(Command):
         """
         Get/set a channels topic.
         """
+        
         self.client.send_event(Event(None, self.token(), [topic]))
 
 class NamesCmd(Command):
@@ -505,11 +511,11 @@ class NamesCmd(Command):
     def token():
         return 'NAMES'
     
-    def _receive(self, event):
-        # update user list
-        pass
-    
     def _send(self, channels):
+        """
+        Request a NAMES list.
+        """
+        
         self.client.send_event(Event(None, self.token(), [','.join(channels)]))
 
 class InviteCmd(Command):
@@ -541,11 +547,6 @@ class InviteCmd(Command):
     def token():
         return 'INVITE'
     
-    def _receive(self, event):
-        # notify someone
-        # on autoinvite, join channel
-        pass
-    
     def _send(self, nickname, channel):
         self.client.send_event(Event(None, self.token(), [nickname, channel]))
 
@@ -576,12 +577,6 @@ class KickCmd(Command):
     @staticmethod
     def token():
         return 'KICK'
-    
-    def _receive(self, event):
-        # remove user from channel list
-        # if user==self, notify someone
-        # if user==self, on autorejoin join channel again
-        pass
     
     def _send(self, channels, users, message=None):
         parameter = [','.join(channels), ','.join(users)]
@@ -714,7 +709,6 @@ class MotdCmd(Command):
             parameter.append(target)
         
         self.client.send_event(Event(None, self.token(), parameter))
-
 
 
 """
