@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,14 +28,14 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 import re
 
 from interaction.irc.message import CHANNEL_TOKEN
 from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
-MIRC_COLOR = "\x03"
+MIRC_COLOR = '\x03'
 
 class Module(object):
     """
@@ -128,8 +129,8 @@ class InteractiveModule(Module):
         
         Module.__init__(self, client)
         
-        # cache reference to userlist
-        self.userlist = self.client.get_module('usermgmt').userlist
+        # cache reference to usermgmt module
+        self.usermgmt = self.client.get_module('usermgmt')
         
         self.identifier = self.module_identifier()
         self.command_dict = {}
@@ -177,7 +178,7 @@ class InteractiveModule(Module):
         space (0x20) character.
         
         Examples:
-        self.addCommand('roll', r'^([\d]+)(?:-([\d]+))$', Role.USER, self.roll)
+        self.add_command('roll', r'^([\d]+)(?:-([\d]+))$', Role.USER, self.roll)
         
         self.add_command('black', None, Role.USER, self.choose)
         self.add_command('white', None, Role.USER, self.choose)
@@ -185,8 +186,6 @@ class InteractiveModule(Module):
         
         self.add_command('calendar add',    '???', Role.USER, self.add)
         self.add_command('calendar delete', '???', Role.USER, self.delete)
-        
-        @return none
         """
         
         raise NotImplementedError
@@ -194,17 +193,19 @@ class InteractiveModule(Module):
     """-------------------------------------------------------------------------
     Module command handling
     -------------------------------------------------------------------------"""
-    def add_command(self, keyword, pattern, location, role, callback):
+    def add_command(self, keyword, pattern, location, reply, role, callback):
         """
         Add a command to the internal command dictionary.
         
         @param keyword: The keyword that triggers the command.
         @param pattern: A regex pattern that defines the arguments.
         @param location: The location where the command can be executed.
+        @param reply: The command the reply should be sent with.
         @param role: The role the calling user needs to have.
         @param callback: The callback function.
         """
-        self.command_dict[keyword] = ModuleCommand(self, keyword, pattern, location, role, callback)
+        
+        self.command_dict[keyword] = ModuleCommand(self, keyword, pattern, location, reply, role, callback)
     
     def parse(self, event):
         """
@@ -223,6 +224,8 @@ class InteractiveModule(Module):
         
         This module will only accept Privmsg or Notice events. It needs
         to be activated in get_receive_listeners().
+
+        TODO: add mirc color codes to reply
         
         @param event: The Privmsg or Notice event.
         """
@@ -256,6 +259,9 @@ class InteractiveModule(Module):
         ---------------------------------------------------------------------"""
         parameter = message_match.group('parameter')
 
+        if parameter is None:
+            parameter = ''
+        
         try:
             callback = command_object.callback
             parameter = command_object.match_arguments(parameter)
@@ -270,8 +276,8 @@ class InteractiveModule(Module):
         location = Location.get(target)
 
         try:
-            callback(event, location, command, parameter)
-            
+            reply = callback(event, location, command, parameter)
+        
         except Exception as ex:
             """
             Should not happen, but just in case.
@@ -279,10 +285,32 @@ class InteractiveModule(Module):
             TODO: throw stack trace
             """
             
+            reply = 'Es ist ein interner Fehler aufgetreten, bitte Admin benachrichtigen.'
+            
             self.client.logger.error('Unhandled exception "{1}" thrown in {0}'.format(
                 self.__class__.__name__,
                 str(ex)
             ))
+        
+        """---------------------------------------------------------------------
+        Send reply
+        
+        TODO: add more sophisticated reply handling
+        TODO: - multiple lines
+        TODO: - w/ or w/o identifier
+        ---------------------------------------------------------------------"""
+
+        if reply is not None:
+            if location == Location.CHANNEL:
+                target = event.parameter[0]
+                
+            elif location == Location.QUERY:
+                target = event.source.nickname
+                
+        reply_string = '{0}: {1}'.format(self.identifier, reply)
+        
+        self.client.send_command(command_object.reply, target, reply_string)
+
     
     def invalid_parameters(self, event, command, parameter):
         """
@@ -293,69 +321,29 @@ class InteractiveModule(Module):
         """
         
         pass
-    
-    def get_target(self, location_from, event):
-        """
-        Based on the location, extract the target for the reply.
-        
-        TODO: handle reply in parse, make reply the return string or None for no reply
-        
-        @param location_from: The location value (CHANNEL or QUERY)
-        @param event: The event to analyze.
-        
-        @return The target from the event.
-        
-        @raise ValueError: If the location is invalid.
-        """
-        if location_from == Location.CHANNEL:
-            target = event.parameter[0]
-            
-        elif location_from == Location.QUERY:
-            target = event.source.nickname
-            
-        else:
-            raise ValueError("location_from may only be channel or query")
-        
-        return target
-    
-    def send_reply(self, command, target, reply):
-        """
-        Send a pretty reply with module identifier and color
-        formatting.
-        
-        Only Privmsg and Notice are allowed here. The target may be
-        either a nickname or a channel.
-        
-        TODO: add mirc color codes
-        TODO: fallback to privmsg instead of raising exception?
-        
-        @param command: The reply type.
-        @param target: The target to send the reply to.
-        @param reply: The reply string to send.
-        """
-        
-        if command.token() not in (PrivmsgCmd.token(), NoticeCmd.token()):
-            raise ValueError('only Privmsg or Notice are valid commands')
-        
-        reply = '{0}: {1}'.format(self.identifier, reply)
-        
-        self.client.send_command(command, target, reply)
 
 class ModuleCommand(object):
     """
     Represent a module command that can be triggered by IRC users.
     """
     
-    def __init__(self, module, keyword, pattern, location, role, callback):
+    def __init__(self, module, keyword, pattern, location, reply, role, callback):
         """
         Initialize the command.
+
+        TODO: fallback to privmsg reply instead of raising exception?
         
         @param module: The module instance the command belongs to.
         @param keyword: The keyword that triggers the command.
         @param pattern: A regex pattern that defines the arguments.
+        @param location: The location where the command can be executed.
+        @param reply: The command the reply should be sent with.
         @param role: The role the calling user needs to have.
         @param callback: The callback function.
         """
+        
+        if reply.token() not in (PrivmsgCmd.token(), NoticeCmd.token()):
+            raise ValueError('only Privmsg or Notice are valid replys')
         
         self.module = module
         self.keyword = keyword
@@ -366,6 +354,7 @@ class ModuleCommand(object):
             self.pattern = None
         
         self.location = location
+        self.reply = reply
         self.role = role
         self.callback = callback
         
@@ -383,7 +372,7 @@ class ModuleCommand(object):
         Check if the given source has sufficient access privileges.
         """
         
-        user = self.module.userlist.get(source)
+        user = self.module.usermgmt.userlist.get(source)
         role = user.getInfo('Privileges')
         
         return Role.valid(self.role, role)
@@ -391,6 +380,8 @@ class ModuleCommand(object):
     def match_arguments(self, data):
         """
         Match and extract data according to the object's pattern.
+        
+        TODO: check if KeyError handling can be removed.
         
         @param data: A string.
         
@@ -408,6 +399,7 @@ class ModuleCommand(object):
         
         # TypeError when data can not be matched
         # KeyError when no match was found
+        # IndexError when no match was found
         except TypeError, KeyError:
             raise ValueError
         
@@ -427,15 +419,29 @@ class Role(object):
     ADMIN = 3 # Right.USER | Right.ADMIN
     
     def __init__(self):
+        """
+        This class may currently not be instantiated. 
+        """
+        
         raise NotImplementedError
     
     @staticmethod
     def valid(required, role):
+        """
+        Check whether the user role contains sufficient rights.
+        
+        @param required: The minimum rights to validate.
+        @param role: The actual rights.
+        
+        @return True if there are sufficient rights, False otherwise.
+        """
+        
         return (required & role == required) 
 
 class Location(object):
     """
     Represent a location determining where a ModuleCommand can be executed.
+    
     TODO: need real object here or maybe move to own python module?
     """
     
@@ -444,10 +450,23 @@ class Location(object):
     BOTH    = CHANNEL | QUERY
 
     def __init__(self):
+        """
+        This class may currently not be instantiated. 
+        """
+        
         raise NotImplementedError
 
     @staticmethod
     def get(target):
+        """
+        Derive the location from the target.
+        
+        @param target: The target to check.
+        
+        @return CHANNEL If the target starts with a channel token,
+        QUERY otherwise.
+        """
+        
         if target.startswith(CHANNEL_TOKEN):
             location = Location.CHANNEL
         else:
@@ -455,7 +474,16 @@ class Location(object):
         
         return location
 
-
     @staticmethod
     def valid(required, location):
+        """
+        Check whether the location matches the requirements.
+        
+        @param required: The locations that are valid.
+        @param location: The actual location.
+        
+        @return True if the actual location is within the required location,
+        False otherwise.
+        """
+        
         return (required | location == required)
