@@ -11,7 +11,7 @@ timern, webinterface, andere threads, etc
 
 empfangen:
 empfangene events müssen verarbeitet und an entsprechende handler weitergereicht werden
-dabei wird zwischen erstmal IRC-implementierung und bot-implmentierung unterschieden
+dabei wird grundsätzlich zwischen IRC-implementierung und bot-implmentierung unterschieden
 
 IRC-implementierung:
 reaktionen auf message-events
@@ -24,7 +24,8 @@ reaktionen auf reply-events
 - fehler-behandlung
 
 Bot-implementierugn:
-reaktionen auf beliebig konfigurierbare events
+reaktionen auf message-events
+reaktionen auf den inhalt von message-events
 
 es bietet sich an, den code für das registrieren und dispatchen von events ebenfalls zu
 abstrahieren und von beiden implementierungen zu nutzen.
