@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -23,11 +24,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since 06.01.2010
+@since Jan 06, 2011
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from sys       import modules
 from traceback import print_exc
@@ -43,7 +44,7 @@ from interaction.irc.source  import ClientSource
 from interaction.irc.command import *
 from interaction.irc.channel import User
 
-CRLF = "\x0D\x0A"
+CRLF = '\x0D\x0A'
 
 class Client(Interaction, async_chat):
     """
@@ -52,30 +53,30 @@ class Client(Interaction, async_chat):
     
     class ClientConfig(Config):
         def name(self):
-            return "interaction.irc"
+            return 'interaction.irc'
             
         def valid_keys(self):
             return [
-                "nickname",
-                "anickname",
-                "realname",
-                "ident",
-                "address",
-                "port",
-                "modules",
-                "channels",
+                'nickname',
+                'anickname',
+                'realname',
+                'ident',
+                'address',
+                'port',
+                'modules',
+                'channels',
             ]
         
         def default_values(self):
             return {
-                "nickname"  : "Bot-test",
-                "anickname" : "Bot-test-",
-                "realname"  : "Bot",
-                "ident"     : "bot",
-                "address"   : "de.quakenet.org",
-                "port"      : 6667,
-                "modules"   : ['usermgmt', 'roll'],
-                "channels"  : ['#test']
+                'nickname'  : 'Bot-test',
+                'anickname' : 'Bot-test-',
+                'realname'  : 'Bot',
+                'ident'     : 'bot',
+                'address'   : 'de.quakenet.org',
+                'port'      : 6667,
+                'modules'   : ['usermgmt', 'roll', 'orakel'],
+                'channels'  : ['#test']
             }
 
     def __init__(self, bot):
@@ -159,6 +160,7 @@ class Client(Interaction, async_chat):
         
         @param command: A pointer to the handler class.
         """
+        
         return self._commands[command.token()]
     
     def unregister_command(self, command):
@@ -167,6 +169,7 @@ class Client(Interaction, async_chat):
         
         @param command: A pointer to the handler class.
         """
+        
         del self._commands[command.token()]
             
     def send_command(self, command, *parameters):
@@ -186,6 +189,7 @@ class Client(Interaction, async_chat):
         """
         Load all configured modules.
         """
+        
         for module in self.config.get('modules'):
             self.load_module(module)
     
@@ -292,7 +296,7 @@ class Client(Interaction, async_chat):
         nickname in use are catched and handled by high-level IRC commands.
         """
         
-        self.logger.info("Registering connection, Nickname: {0}, Realname: {1}, Ident: {2}".format(self.me.source.nickname, self.me.realname, self.me.source.ident))
+        self.logger.info('Registering connection, Nickname: {0}, Realname: {1}, Ident: {2}'.format(self.me.source.nickname, self.me.realname, self.me.source.ident))
         
         self.send_command(NickCmd, self.me.source.nickname)
         self.send_command(UserCmd, self.me.source.ident, self.me.realname)
@@ -303,8 +307,8 @@ class Client(Interaction, async_chat):
         received.
         """
         
-        self.logger.info("Connected to server.")
-        self.logger.info("Joining channels: {0}".format(self.config.get('channels')))
+        self.logger.info('Connected to server.')
+        self.logger.info('Joining channels: {0}'.format(self.config.get('channels')))
         
         self.send_command(JoinCmd, self.config.get('channels'))
     
@@ -361,9 +365,9 @@ class Client(Interaction, async_chat):
         
         message = event.create_message()
         
-        self.logger.info("Sent:     <{0}> {1}: {2}".format(event.source, event.command, event.parameter))
+        self.logger.info('Sent:     <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))
         
-        self.push("{0}{1}".format(message, CRLF))
+        self.push('{0}{1}'.format(message, CRLF))
         
     """-------------------------------------------------------------------------
     Implementation of asyncore methods 
@@ -425,7 +429,7 @@ class Client(Interaction, async_chat):
         
         FIXME: find better way to do this
         """
-        data = "".join([line.strip(CRLF) for line in data])
+        data = ''.join([line.strip(CRLF) for line in data])
         
         message = Message(data)
         
