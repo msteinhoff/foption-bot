@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,7 +28,7 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from interaction.irc.channel import Channel
 from interaction.irc.user    import User
