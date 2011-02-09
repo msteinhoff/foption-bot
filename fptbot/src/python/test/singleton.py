@@ -8,3 +8,18 @@ class Singleton(object):
         return it
     def init(self, *args, **kwds):
         pass
+
+
+def __new__(cls):
+    """
+    The singleton
+    """
+    inst = cls.__dict__.get("__inst__")
+    
+    if inst != None:
+        return inst
+    
+    cls.__inst__ = inst = object.__new__(cls)
+    
+    return inst
+
