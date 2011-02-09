@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -28,7 +29,7 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$$"
+__version__ = '$$'
 
 import random
 
@@ -36,22 +37,17 @@ from interaction.irc.module import InteractiveModule, Location, Role
 from interaction.irc.command import PrivmsgCmd
 
 class Roll(InteractiveModule):
-    '''
-    random roll 1-X
-    '''
+    """
+    This module provides a virtual dice.
+    """
     
     def module_identifier(self):
         return 'Rollapparillo'
     
     def init_commands(self):
-        self.add_command('roll',     r'^([\d]+)(?:-([\d]+))?$', Location.CHANNEL, Role.USER,  self.roll)
-        self.add_command('rollqry',  None,                      Location.QUERY,   Role.USER,  self.rollquery)
-        self.add_command('rollboth', None,                      Location.BOTH,    Role.USER,  self.rollboth)
-        self.add_command('rolladm',  None,                      Location.QUERY,   Role.ADMIN, self.rolladmin)
+        self.add_command('roll', r'^([\d]+)(?:-([\d]+))?$', Location.CHANNEL, PrivmsgCmd, Role.USER,  self.roll)
     
     def roll(self, event, location, command, parameter):
-        target = self.get_target(location, event)
-        
         if parameter[1]:
             min = int(parameter[0])
             max = int(parameter[1])
@@ -59,36 +55,19 @@ class Roll(InteractiveModule):
             min = 1
             max = int(parameter[0])
     
-        if max > 0 and max >= min:
-            result = random.randint(min, max)
-            
-            reply = "{0} has rolled: {1} ({2}-{3})".format(
-                event.source.nickname,
-                result,
-                min,
-                max
-            )
+        if max <= 0 or max <= min:
+            return
         
-        self.send_reply(PrivmsgCmd, target, reply)
+        result = random.randint(min, max)
         
-    def rollquery(self, event, location, command, parameter):
-        target = self.get_target(location, event)
+        reply = '{0} has rolled: {1} ({2}-{3})'.format(
+            event.source.nickname,
+            result,
+            min,
+            max
+        )
         
-        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als user im query')
-
-    def rollboth(self, event, location, command, parameter):
-        target = self.get_target(location, event)
+        return reply
         
-        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als user im chan und query')
-
-    def rolladmin(self, event, location, command, parameter):
-        target = self.get_target(location, event)
-        
-        self.send_reply(PrivmsgCmd, target, 'Mich gibts nur als admin im query')
-
     def invalid_parameters(self, event, location, command, parameter):
-        target = event.parameter[0]
-        
-        reply = "usage: .roll zahl[-zahl]"
-        
-        self.send_reply(PrivmsgCmd, target, reply)
+        return 'usage: .roll zahl[-zahl]'
