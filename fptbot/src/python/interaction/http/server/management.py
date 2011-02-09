@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -24,8 +25,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Jan 8, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
+
+__version__ = '$Rev$'
 
 class Management(object):
     """
@@ -34,6 +37,6 @@ class Management(object):
     
     def __init__(self):
         """
-        
         """
+        
         pass

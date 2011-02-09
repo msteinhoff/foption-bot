@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -41,31 +42,31 @@ Currently, the following number ranges are defined:
 20001-20200: IRC
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 __all__ = [
-    "message"
+    'message'
 ]
 
 message = {}
 
-message[01000] = "configuration saved"
-message[01001] = "unable to save configuration"
-message[01002] = "configuration loaded"
-message[01003] = "unable to load configuration: config file was found"
+message[01000] = 'configuration saved'
+message[01001] = 'unable to save configuration'
+message[01002] = 'configuration loaded'
+message[01003] = 'unable to load configuration: config file was found'
 
-message[20001] = "trying to connect to %(address)s:%(port)d"
-message[20002] = "connection failed"
-message[20003] = "closing connection"
-message[20005] = ""
-message[20006] = ""
-message[20007] = ""
-message[20008] = ""
-message[20009] = ""
-message[20010] = ""
-message[20011] = ""
-message[20012] = ""
-message[20013] = ""
-message[20014] = ""
-message[20015] = ""
-message[20016] = ""
+message[20001] = 'trying to connect to %(address)s:%(port)d'
+message[20002] = 'connection failed'
+message[20003] = 'closing connection'
+message[20005] = ''
+message[20006] = ''
+message[20007] = ''
+message[20008] = ''
+message[20009] = ''
+message[20010] = ''
+message[20011] = ''
+message[20012] = ''
+message[20013] = ''
+message[20014] = ''
+message[20015] = ''
+message[20016] = ''

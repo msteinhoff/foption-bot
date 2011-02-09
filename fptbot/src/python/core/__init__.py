@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -27,13 +28,13 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 __all__ = [
-    "messages",
-    "constants",
-    "exceptions",
+    'messages',
+    'constants',
+    'exceptions',
 
-    "bot",
-    "config",
+    'bot',
+    'config',
 ]

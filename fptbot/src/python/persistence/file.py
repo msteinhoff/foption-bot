@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -23,11 +24,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since 08.01.2010
+@since Jan 08, 2011
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from cPickle import dump
 from cPickle import load
@@ -35,24 +36,22 @@ from cPickle import load
 from persistence import Persistence
 
 class File(Persistence):
-    '''
-    classdocs
-    '''
+    """
+    Provide pickle object persistence to all sub-systems.
+    """
 
-    def __init__(self):
-        '''
-        Constructor
-        '''
-            
     def write(self, filename, object):
         """
-        serialize a python object's state and write the data to the filesystem
+        Persist a python object to a file.
         
-        @param filename: the destination filename
-        @param object:   the object to serialize
+        Serialize a python object's state and write the data to the
+        filesystem.
+        
+        @param filename: The destination filename.
+        @param object: The object to serialize.
         """
         
-        f = open(filename, "w")
+        f = open(filename, 'w')
         
         dump(object, f)
         
@@ -60,17 +59,46 @@ class File(Persistence):
     
     def read(self, filename):
         """
-        read the serialized data of a python object's state and create an object from it
+        Restore a python object from a file.
         
-        @param filename: the source filename
+        Read the serialized data of a python object's state and create
+        an object from it.
+        
+        @param filename: The source filename.
         
         @return the restored object 
         """
         
-        f = open(filename, "r")
+        f = open(filename, 'r')
         
         object = load(f)
         
         f.close()
         
         return object
+    
+    def write_textfile(self, filename, list):
+        """
+        """
+        f = open(filename, 'w')
+        
+        f.writelines(list)
+        
+        f.close()
+        
+    
+    def read_textfile(self, filename):
+        """
+        """
+        try:
+            f = open(filename, "r")
+            
+            list = f.readlines()
+            
+            f.close()
+            
+            return list
+        
+        except:
+            return []
+

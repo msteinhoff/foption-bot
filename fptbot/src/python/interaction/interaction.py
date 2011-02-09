@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -24,12 +25,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Jan 13, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 class Interaction(object):
+    """
+    Provides a basic structure for all interaction sub-systems.
+    """
+    
     @staticmethod
     def startInteraction(bot, object):
         instance = object(bot)

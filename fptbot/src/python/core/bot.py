@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -23,11 +24,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since 06.01.2010
+@since Jan 06, 2011
 @author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
@@ -44,7 +45,7 @@ class Bot(object):
     
     class BotConfig(Config):
         def name(self):
-            return "core.bot"
+            return 'core.bot'
             
         def valid_keys(self):
             return []
@@ -84,7 +85,7 @@ class Bot(object):
         """
         
         if name == None:
-            name = "core.bot"
+            name = 'core.bot'
             
         return getLogger(name)
 
@@ -96,7 +97,7 @@ class Bot(object):
         and call their start() method.
         """
         
-        self.getLogger().info("starting the system")
+        self.getLogger().info('starting the system')
         
         for name, object in self._interaction.items():
             #self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
@@ -105,4 +106,4 @@ class Bot(object):
             self._processes[name] = object(self)
             self._processes[name].start()
         
-        self.getLogger().info("startup completed")
+        self.getLogger().info('startup completed')

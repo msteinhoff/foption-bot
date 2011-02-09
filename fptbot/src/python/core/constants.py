@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -29,16 +30,16 @@ THE SOFTWARE.
 TODO: Make environment-specific data configurable.
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 __all__ = [
-    "DIR_ROOT",
-    "DIR_CONFIG",
-    "DIR_DATA"
+    'DIR_ROOT',
+    'DIR_CONFIG',
+    'DIR_DATA'
 ]
 
-DIR_ROOT   = "/Users/msteinhoff/Work/Eclipse/foption/bot"
+DIR_ROOT   = '/Users/msteinhoff/Work/Eclipse/foption/bot'
 
-DIR_CONFIG = "{0}/config".format(DIR_ROOT)
-DIR_DATA   = "{0}/data".format(DIR_ROOT)
-DIR_LOGS   = "{0}/logs".format(DIR_ROOT)
+DIR_CONFIG = '{0}/config'.format(DIR_ROOT)
+DIR_DATA   = '{0}/data'.format(DIR_ROOT)
+DIR_LOGS   = '{0}/logs'.format(DIR_ROOT)

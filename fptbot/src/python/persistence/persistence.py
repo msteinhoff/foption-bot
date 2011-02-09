@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """
 $Id$
 
@@ -24,16 +25,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Jan 9, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
-__version__ = "$Rev$"
+__version__ = '$Rev$'
 
 class Persistence(object):
     """
-    base class for persistence implementations
-    
-    currently not implemented
+    Base class for Persistence implementations.
     """
     
-    pass
+    def __init__(self):
+        raise NotImplementedError
