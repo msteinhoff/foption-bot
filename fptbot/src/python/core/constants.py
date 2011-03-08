@@ -43,3 +43,9 @@ DIR_ROOT   = '/Users/msteinhoff/Work/Eclipse/foption/bot'
 DIR_CONFIG = '{0}/config'.format(DIR_ROOT)
 DIR_DATA   = '{0}/data'.format(DIR_ROOT)
 DIR_LOGS   = '{0}/logs'.format(DIR_ROOT)
+
+DIR_DB_FACTS    = '{0}/serialized/wissen.db'.format(DIR_DATA)
+DIR_DB_CALENDAR = '{0}/sqlite/calendar.db'.format(DIR_DATA)
+
+TIME_MINUTE = 60
+TIME_HOUR   = TIME_MINUTE * 60  
