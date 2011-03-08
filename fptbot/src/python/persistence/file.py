@@ -40,23 +40,6 @@ class File(Persistence):
     Provide pickle object persistence to all sub-systems.
     """
 
-    def write(self, filename, object):
-        """
-        Persist a python object to a file.
-        
-        Serialize a python object's state and write the data to the
-        filesystem.
-        
-        @param filename: The destination filename.
-        @param object: The object to serialize.
-        """
-        
-        f = open(filename, 'w')
-        
-        dump(object, f)
-        
-        f.close()
-    
     def read(self, filename):
         """
         Restore a python object from a file.
@@ -77,28 +60,57 @@ class File(Persistence):
         
         return object
     
-    def write_textfile(self, filename, list):
+    def write(self, filename, object):
         """
+        Persist a python object to a file.
+        
+        Serialize a python object's state and write the data to the
+        filesystem.
+        
+        @param filename: The destination filename.
+        @param object: The object to serialize.
+        """
+        
+        f = open(filename, 'w')
+        
+        dump(object, f)
+        
+        f.close()
+    
+    def readlines(self, filename):
+        """
+        Restore a python sequence from a file.
+        
+        Read the string data and create a sequence from it.
+        
+        @param filename: The source filename.
+        
+        @return the sequence.
+        """
+        f = open(filename, "r")
+        
+        list = f.readlines()
+        
+        f.close()
+        
+        return list
+
+    def writelines(self, filename, sequence):
+        """
+        Persist a python sequence to a file.
+        
+        Write a sequence of strings to the filesystem using writelines().
+        Each string object must have a line separator.
+        
+        @param filename: The destination filename.
+        @param sequence: The sequence to write.
+        
+        @see file.writelines()
         """
         f = open(filename, 'w')
         
-        f.writelines(list)
+        f.writelines(sequence)
         
         f.close()
         
     
-    def read_textfile(self, filename):
-        """
-        """
-        try:
-            f = open(filename, "r")
-            
-            list = f.readlines()
-            
-            f.close()
-            
-            return list
-        
-        except:
-            return []
-
