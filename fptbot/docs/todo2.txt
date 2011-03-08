@@ -1,0 +1,10 @@
+channel userlist
+hier muss noch der usermode rein
+getUserByNick
+getUserBySource
+
+requestByNick
+requestBySource
+
+user channellist
+channel-objekt statt channelnamen
