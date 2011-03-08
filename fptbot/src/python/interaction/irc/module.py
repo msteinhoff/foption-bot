@@ -32,6 +32,10 @@ __version__ = '$Rev$'
 
 import re
 
+from time import sleep
+from datetime import date
+from threading import Timer
+
 from interaction.irc.message import CHANNEL_TOKEN
 from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
@@ -97,6 +101,28 @@ class Module(object):
         overriding the destructor.
         """
         pass
+    
+    def start_timer(self, interval, callback):
+        self.timer = Timer(interval, callback)
+        self.timer.start()
+    
+    def start_daily_timer(self, checkInterval, callback):
+        self.timer = Timer(checkInterval, self.daily_event, [date.today(), checkInterval, callback])
+        self.timer.start()
+
+    def cancel_timer(self):
+        if self.timer == None:
+            return
+        
+        self.timer.cancel()
+        
+    def daily_event(self, dayWhenStarted, checkInterval, callback):
+        today = date.today()
+        
+        if (today != dayWhenStarted):
+            callback(today)
+        
+        self.start_daily_timer(checkInterval, callback)
 
 class InteractiveModule(Module):
     """
@@ -294,10 +320,6 @@ class InteractiveModule(Module):
         
         """---------------------------------------------------------------------
         Send reply
-        
-        TODO: add more sophisticated reply handling
-        TODO: - multiple lines
-        TODO: - w/ or w/o identifier
         ---------------------------------------------------------------------"""
 
         if reply is not None:
@@ -306,10 +328,14 @@ class InteractiveModule(Module):
                 
             elif location == Location.QUERY:
                 target = event.source.nickname
-                
-        reply_string = '{0}: {1}'.format(self.identifier, reply)
         
-        self.client.send_command(command_object.reply, target, reply_string)
+        if isinstance(reply, basestring):
+            reply_string = '{0}: {1}'.format(self.identifier, reply)
+            self.client.send_command(command_object.reply, target, reply_string)
+        else:
+            for reply_string in reply.format_all(self.identifier):
+                self.client.send_command(command_object.reply, target, reply_string)
+                sleep(0.1)
 
     
     def invalid_parameters(self, event, command, parameter):
@@ -321,6 +347,24 @@ class InteractiveModule(Module):
         """
         
         pass
+
+class InteractiveModuleReply(object):
+    def __init__(self, message=None, identifier=False):
+        self.replies = [message]
+        
+    def add(self, message):
+        self.replies.append(message)
+    
+    def get_all(self):
+        return self.replies
+    
+    def format_all(self, identifier):
+        result = []
+        
+        for reply in self.replies:
+            result.append('{0}: {1}'.format(identifier, reply))
+            
+        return result
 
 class ModuleCommand(object):
     """
