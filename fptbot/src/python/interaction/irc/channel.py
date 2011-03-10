@@ -147,7 +147,7 @@ class Userlist(object):
         """
         
         self.users[user.source.nickname] = user
-    
+        
     def get(self, source):
         """
         Return a user object by its nickname.
@@ -210,8 +210,8 @@ class Userlist(object):
         @raise KeyError if no such user was found.
         """
         
-        for channel in self.users[source.nickname].getChannels():
-            channel.removeUser(source.nickname)
+        for channel in self.users[source.nickname].get_channels():
+            channel.remove_user(source.nickname)
             
         del self.users[source.nickname]
         
@@ -242,14 +242,14 @@ class Channel(object):
         
         return 'Channel(Name={0},Users={1})'.format(self.name, '|'.join(self.users))
         
-    def getModes(self):
+    def get_modes(self):
         """
         Yeah, what to do here? do we need this actually?
         """
         
         pass
     
-    def addUser(self, user, mode=None):
+    def add_user(self, user, mode=None):
         """
         Add a user object to the channel.
         The user object is notified about being added to the channel. 
@@ -259,9 +259,9 @@ class Channel(object):
         """
         
         self.users[user.source.nickname] = (user, mode)
-        user.addChannel(self)
+        user.add_channel(self)
         
-    def updateUserMode(self, nickname, mode):
+    def update_user_mode(self, nickname, mode):
         """
         Updates the user mode.
         
@@ -269,18 +269,20 @@ class Channel(object):
         @param mode: The new user mode.
         """
         
-        self.users[nickname] = (self.getUser(nickname), mode)
+        self.users[nickname] = (self.get_user(nickname), mode)
         
-    def getUser(self, nickname):
+    def get_user(self, nickname):
         """
         Return a user object by its nickname.
         
         @param nickname: The nickname of the user object.
         """
         
-        return self.users[nickname][0]
+        entity = self.users[nickname]
+        
+        return entity[0]
     
-    def getUserList(self):
+    def get_user_list(self):
         """
         Return the current user list of the channel.
         
@@ -289,7 +291,7 @@ class Channel(object):
         
         return self.users
     
-    def renameUser(self, current_nickname, new_nickname):
+    def rename_user(self, current_nickname, new_nickname):
         """
         Rename a user object.
         
@@ -306,14 +308,14 @@ class Channel(object):
         
         del self.users[current_nickname]
 
-    def removeUser(self, nickname):
+    def remove_user(self, nickname):
         """
         Remove a user object from the channel.
         
         @param nickname: The nickname of the user.
         """
         
-        self.users[nickname].removeChannel(self)
+        self.users[nickname].remove_channel(self)
         del self.users[nickname]
 
 class User(object):
@@ -348,7 +350,7 @@ class User(object):
             self.source.ident,
             self.source.host,
             self.realname,
-            '|'.join(self.channels)
+            '|'.join(map(str, self.channels))
         )
         
     def rename(self, new_nickname):
@@ -361,11 +363,11 @@ class User(object):
         """
         
         for channel in self.channels:
-            channel.renameUser(self.source.nickname, new_nickname)
+            channel.rename_user(self.source.nickname, new_nickname)
         
         self.source.nickname = new_nickname
 
-    def addChannel(self, channel):
+    def add_channel(self, channel):
         """
         Adds a channel to the user.
 
@@ -380,14 +382,14 @@ class User(object):
         
         self.channels.append(channel)
         
-    def getChannels(self):
+    def get_channels(self):
         """
         Return a list of all channels that user and bot have in common.
         """
         
         return self.channels
     
-    def removeChannel(self, channel):
+    def remove_channel(self, channel):
         """
         Removes a channel from the user.
         
@@ -402,7 +404,7 @@ class User(object):
         
         self.channels.remove(channel)
 
-    def isOn(self, channel):
+    def is_on(self, channel):
         """
         Determines whether the user is on the given channel.
         
@@ -411,7 +413,7 @@ class User(object):
         
         return channel in self.channels
 
-    def setInfo(self, module, information):
+    def set_info(self, module, information):
         """
         Set module-specific information, e.g. a dictionary or a data
         object.
@@ -425,7 +427,7 @@ class User(object):
         
         self.information[module] = information
     
-    def getInfo(self, module):
+    def get_info(self, module):
         """
         Retrieve module-specific information.
         
