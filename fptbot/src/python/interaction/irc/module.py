@@ -41,6 +41,9 @@ from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
 MIRC_COLOR = '\x03'
 
+class ModuleError(Exception):
+    pass
+
 class Module(object):
     """
     Extend the IRC client's functionality.
@@ -321,13 +324,23 @@ class InteractiveModule(Module):
         """---------------------------------------------------------------------
         Send reply
         ---------------------------------------------------------------------"""
-
         if reply is not None:
             if location == Location.CHANNEL:
                 target = event.parameter[0]
                 
             elif location == Location.QUERY:
                 target = event.source.nickname
+        
+        self.send_reply(command_object, target, reply)
+    
+    def send_reply(self, command_object, target, reply):
+        """
+        Send a reply to target.
+        
+        @param command_object: How the reply should be sent.
+        @param target: The receiver of the reply.
+        @param reply: The reply to send, String or Reply object.
+        """
         
         if isinstance(reply, basestring):
             reply_string = '{0}: {1}'.format(self.identifier, reply)
@@ -336,7 +349,6 @@ class InteractiveModule(Module):
             for reply_string in reply.format_all(self.identifier):
                 self.client.send_command(command_object.reply, target, reply_string)
                 sleep(0.1)
-
     
     def invalid_parameters(self, event, command, parameter):
         """
