@@ -28,8 +28,10 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-from interaction.irc.module  import InteractiveModule, ModuleError, Location, Role
+from persistence.sqlite import DatabaseError
+from interaction.irc.module import InteractiveModule, ModuleError, Location, Role
 from interaction.irc.message import SPACE
+from interaction.irc.source import ClientSource
 from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
                                     NickCmd, TopicCmd, PrivmsgCmd, InviteCmd, \
                                     NamesReply, NamesEndReply, \
@@ -37,7 +39,6 @@ from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
                                     WhoisChannelsReply, WhoisIdleReply, \
                                     WhoisUserReply
 from interaction.irc.channel import Channellist, Userlist
-from interaction.irc.source  import ClientSource
 
 """-----------------------------------------------------------------------------
 Constants
@@ -63,7 +64,7 @@ class Usermgmt(InteractiveModule):
     """
     
     """-------------------------------------------------------------------------
-    Implementation of Module methods 
+    Implementation of Module methods
     -------------------------------------------------------------------------"""
     def get_receive_listeners(self):
         """
@@ -71,9 +72,8 @@ class Usermgmt(InteractiveModule):
         
         TODO: add who/whois handling
         """
-        return {
-            PrivmsgCmd:     self.parse,
-            
+        
+        return InteractiveModule.get_receive_listeners(self).update({
             JoinCmd:        self.process_join,
             PartCmd:        self.process_part,
             KickCmd:        self.process_kick,
@@ -88,7 +88,7 @@ class Usermgmt(InteractiveModule):
             
             WhoReply:       self.process_who,
             WhoEndReply:    self.process_whoend,
-        }
+        })
         
     """-------------------------------------------------------------------------
     Implementation of InteractiveModule methods 
@@ -107,16 +107,14 @@ class Usermgmt(InteractiveModule):
         return 'Benutzerverwaltung'
     
     def init_commands(self):
-        self.add_command('listadmin', None, Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_admin)
-        self.add_command('addadmin',  r'^(.+)$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_admin)
-        self.add_command('deladmin',  r'^(.+)$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_admin)
-
+        self.add_command('listadmin', None,  Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_admin)
         self.add_command('adduser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_user)
+        self.add_command('chguser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.change_user)
         self.add_command('deluser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_user)
-
 
     def invalid_parameters(self, event, location, command, parameter):
         """
+        Notify the user about invalid command syntax.
         """
         
         messages = {}
@@ -129,7 +127,7 @@ class Usermgmt(InteractiveModule):
         return messages[command]
     
     """-------------------------------------------------------------------------
-    User handling 
+    Protocol handling
     -------------------------------------------------------------------------"""
     def process_join(self, event):
         """
@@ -291,7 +289,7 @@ class Usermgmt(InteractiveModule):
         pass
 
     """-------------------------------------------------------------------------
-    Role handling 
+    Authorization
     -------------------------------------------------------------------------"""
     def list_admin(self, event, location, command, parameter):
         return "Adminliste: (not implemented)"
@@ -302,3 +300,35 @@ class Usermgmt(InteractiveModule):
     def delete_admin(self, event, location, command, parameter):
         return "User '???' als Admin entfernt."
         return "User '???' befindet sich nicht in der Liste."
+
+    def add_user(self, event, location, command, parameter):
+        """
+        .adduser [password]
+        """
+        
+        password = parameter[0]
+        
+        try:
+            user = self.getAuth(event.source)
+        
+            if not user:
+                raise UserNotAuthed
+            
+            if self.isPrivateUser(user):
+                raise UserExists
+        
+            password_hash = md5(password).hexdigest()
+            
+            self.persistence.insertUser(user, password_hash)
+        
+        except DatabaseError:
+            return "Fehler beim der Accounterstellung!"
+        
+        except UserNotAuthed:
+            return "Du bist nicht geauthed!"
+        
+        except UserExists:
+            return "Du hast bereits einen Account!"
+        
+        return "Dein Account wurde erstellt!"
+
