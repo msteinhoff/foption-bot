@@ -80,36 +80,11 @@ class Calendar(InteractiveModule):
     This module provides calendaring functions.
     """
     
-    
-    """-------------------------------------------------------------------------
-    Configuration
-    -------------------------------------------------------------------------"""
-    class CalenderConfig(Config):
-        def name(self):
-            return 'interaction.irc.module.calendar'
-            
-        def valid_keys(self):
-            return [
-                'dbFile',
-                'reminderInterval',
-                'calendarUrl',
-            ]
-        
-        def default_values(self):
-            return {
-                'dbFile'           : DIR_DB_CALENDAR,
-                'reminderInterval' : TIME_MINUTE * 5,
-                'calendarUrl'      : '',
-            }
-    
-    """-------------------------------------------------------------------------
-    InteractiveModule methods
-    -------------------------------------------------------------------------"""
     def module_identifier(self):
         return 'Kalender'
     
     def initialize(self):
-        self.config = self.CalendarConfig(self.client._bot.getPersistence())
+        self.config = CalenderConfig(self.client._bot.getPersistence())
         
         self.persistence = CalendarPersistence(self.config.get('dbFile'))
         
@@ -132,14 +107,17 @@ class Calendar(InteractiveModule):
 
     def invalid_parameters(self, event, location, command, parameter):
         """
+        Notify the user about invalid command syntax.
         """
         
         messages = {}
         messages['kalender']  = 'usage: .kalender'
         messages['listtoday'] = 'usage: .listtoday'
         messages['topicid']   = 'usage: .topicid <id>'
+        
         messages['addevent']  = 'usage: .addevent <datumvon>[-datumbis] <beschreibung>'
         messages['delevent']  = 'usage: .delevent <id|datum>'
+        
         messages['addcat']    = 'usage: .addcat <name> <farbe>'
         messages['chgcat']    = 'usage: .chgcat <name> <farbe>'
         messages['delcat']    = 'usage: .delcat <name>'
@@ -564,39 +542,26 @@ class Calendar(InteractiveModule):
         
         return "Done."
             
-    """-------------------------------------------------------------------------
-    Module commands - users
-    -------------------------------------------------------------------------"""
-    def add_user(self, event, location, command, parameter):
-        """
-        .adduser [password]
-        """
+"""-------------------------------------------------------------------------
+Configuration
+-------------------------------------------------------------------------"""
+class CalenderConfig(Config):
+    def name(self):
+        return 'interaction.irc.module.calendar'
         
-        password = parameter[0]
-        
-        try:
-            user = self.getAuth(event.source)
-        
-            if not user:
-                raise UserNotAuthed
-            
-            if self.isPrivateUser(user):
-                raise UserExists
-        
-            password_hash = md5(password).hexdigest()
-            
-            self.persistence.insertUser(user, password_hash)
-        
-        except DatabaseError:
-            return "Fehler beim der Accounterstellung!"
-        
-        except UserNotAuthed:
-            return "Du bist nicht geauthed!"
-        
-        except UserExists:
-            return "Du hast bereits einen Account!"
-        
-        return "Dein Account wurde erstellt!"
+    def valid_keys(self):
+        return [
+            'dbFile',
+            'reminderInterval',
+            'calendarUrl',
+        ]
+    
+    def default_values(self):
+        return {
+            'dbFile'           : DIR_DB_CALENDAR,
+            'reminderInterval' : TIME_MINUTE * 5,
+            'calendarUrl'      : '',
+        }
 
 """-----------------------------------------------------------------------------
 Persistence
