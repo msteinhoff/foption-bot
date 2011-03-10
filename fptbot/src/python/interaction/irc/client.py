@@ -110,7 +110,7 @@ class Client(Interaction, async_chat):
         self.load_modules()
 
     """-------------------------------------------------------------------------
-    IRC commands
+    Protocol commands
     -------------------------------------------------------------------------"""
     def register_commands(self):
         """
@@ -183,7 +183,7 @@ class Client(Interaction, async_chat):
         self._commands[command.token()].send(*parameters)
     
     """-------------------------------------------------------------------------
-    Modules
+    Client modules
     -------------------------------------------------------------------------"""
     def load_modules(self):
         """
@@ -430,6 +430,8 @@ class Client(Interaction, async_chat):
         FIXME: find better way to do this
         """
         data = ''.join([line.strip(CRLF) for line in data])
+        
+        data = unicode(data, 'utf8')
         
         message = Message(data)
         
