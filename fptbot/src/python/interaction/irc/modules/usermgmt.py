@@ -28,7 +28,7 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-from interaction.irc.module  import InteractiveModule, Location, Role
+from interaction.irc.module  import InteractiveModule, ModuleError, Location, Role
 from interaction.irc.message import SPACE
 from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
                                     NickCmd, TopicCmd, PrivmsgCmd, InviteCmd, \
@@ -39,9 +39,24 @@ from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
 from interaction.irc.channel import Channellist, Userlist
 from interaction.irc.source  import ClientSource
 
+"""-----------------------------------------------------------------------------
+Constants
+-----------------------------------------------------------------------------"""
 OP_TOKEN = '@'
 VOICE_TOKEN = '+'
 
+"""-----------------------------------------------------------------------------
+Exceptions
+-----------------------------------------------------------------------------"""
+class UserError(ModuleError): pass
+class UserInvalid(UserError): pass
+class UserExists(UserError): pass
+class UserNotAuthed(UserError): pass
+class UserNotAuthorized(UserError): pass
+
+"""-----------------------------------------------------------------------------
+Business Logic
+-----------------------------------------------------------------------------"""
 class Usermgmt(InteractiveModule):
     """
     Maintain a list of channels the bot has joined and users known to the bot.
@@ -95,9 +110,23 @@ class Usermgmt(InteractiveModule):
         self.add_command('listadmin', None, Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_admin)
         self.add_command('addadmin',  r'^(.+)$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_admin)
         self.add_command('deladmin',  r'^(.+)$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_admin)
-        
+
+        self.add_command('adduser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_user)
+        self.add_command('deluser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_user)
+
+
     def invalid_parameters(self, event, location, command, parameter):
-        pass
+        """
+        """
+        
+        messages = {}
+        messages['listadmin'] = ''
+        messages['addadmin']  = ''
+        messages['deladmin']  = ''
+        messages['adduser']   = 'usage: .adduser '
+        messages['deluser']   = 'usage: .deluser '
+        
+        return messages[command]
     
     """-------------------------------------------------------------------------
     User handling 
