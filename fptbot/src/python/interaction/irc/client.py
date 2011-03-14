@@ -75,7 +75,7 @@ class Client(Interaction, async_chat):
                 'ident'     : 'bot',
                 'address'   : 'de.quakenet.org',
                 'port'      : 6667,
-                'modules'   : ['usermgmt', 'roll', 'orakel'],
+                'modules'   : ['usermgmt'],
                 'channels'  : ['#test']
             }
 
@@ -100,8 +100,7 @@ class Client(Interaction, async_chat):
         self.me = User(
             ClientSource(
                 self.config.get('nickname'),
-                self.config.get('ident'),
-                ''
+                self.config.get('ident')
             ),
             self.config.get('realname')
         )
