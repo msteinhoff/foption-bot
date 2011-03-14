@@ -28,23 +28,30 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
+from time import sleep
+from hashlib import md5
+
 from persistence.sqlite import DatabaseError
-from interaction.irc.module import InteractiveModule, ModuleError, Location, Role
-from interaction.irc.message import SPACE
+from interaction.irc.message import SPACE, Location
 from interaction.irc.source import ClientSource
+from interaction.irc.channel import Channel, ChannelList, UserList
+from interaction.irc.module import InteractiveModule, ModuleError
 from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
-                                    NickCmd, TopicCmd, PrivmsgCmd, InviteCmd, \
+                                    NickCmd, TopicCmd, PrivmsgCmd, InviteCmd,\
+                                    WhoisCmd, \
                                     NamesReply, NamesEndReply, \
                                     WhoReply, WhoEndReply, \
                                     WhoisChannelsReply, WhoisIdleReply, \
-                                    WhoisUserReply
-from interaction.irc.channel import Channellist, Userlist
+                                    WhoisUserReply, WhoisServerReply, \
+                                    WhoisEndReply
+
+from interaction.irc.networks.quakenet import WhoisAuthReply
 
 """-----------------------------------------------------------------------------
 Constants
 -----------------------------------------------------------------------------"""
-OP_TOKEN = '@'
-VOICE_TOKEN = '+'
+TOKEN_OP    = '@'
+TOKEN_VOICE = '+'
 
 """-----------------------------------------------------------------------------
 Exceptions
@@ -52,7 +59,7 @@ Exceptions
 class UserError(ModuleError): pass
 class UserInvalid(UserError): pass
 class UserExists(UserError): pass
-class UserNotAuthed(UserError): pass
+class UserNotAuthenticated(UserError): pass
 class UserNotAuthorized(UserError): pass
 
 """-----------------------------------------------------------------------------
@@ -73,22 +80,30 @@ class Usermgmt(InteractiveModule):
         TODO: add who/whois handling
         """
         
-        return InteractiveModule.get_receive_listeners(self).update({
-            JoinCmd:        self.process_join,
-            PartCmd:        self.process_part,
-            KickCmd:        self.process_kick,
-            QuitCmd:        self.process_quit,
-            NickCmd:        self.process_nick,
-            InviteCmd:      self.process_invite,
+        listeners = InteractiveModule.get_receive_listeners(self)
+
+        listeners.update({
+            JoinCmd: self.process_join,
+            PartCmd: self.process_part,
+            KickCmd: self.process_kick,
+            QuitCmd: self.process_quit,
+            NickCmd: self.process_nick,
+            InviteCmd: self.process_invite,
             
-            TopicCmd:       self.process_topic,
+            TopicCmd: self.process_topic,
             
-            NamesReply:     self.process_names,
-            NamesEndReply:  self.process_namesend,
-            
-            WhoReply:       self.process_who,
-            WhoEndReply:    self.process_whoend,
+            NamesReply: self.process_userinfo,
+            NamesEndReply: self.process_userinfo,
+            WhoReply: self.process_userinfo,
+            WhoEndReply: self.process_userinfo,
+            WhoisUserReply: self.process_userinfo,
+            WhoisChannelsReply: self.process_userinfo,
+            WhoisServerReply: self.process_userinfo,
+            WhoisIdleReply: self.process_userinfo,
+            WhoisEndReply: self.process_userinfo
         })
+        
+        return listeners
         
     """-------------------------------------------------------------------------
     Implementation of InteractiveModule methods 
@@ -100,17 +115,17 @@ class Usermgmt(InteractiveModule):
         
         self.me = self.client.me
         
-        self.chanlist = Channellist()
-        self.userlist = Userlist()
+        self.chanlist = ChannelList(self.client)
+        self.userlist = UserList(self.client)
 
     def module_identifier(self):
         return 'Benutzerverwaltung'
     
     def init_commands(self):
-        self.add_command('listadmin', None,  Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_admin)
-        self.add_command('adduser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_user)
-        self.add_command('chguser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.change_user)
-        self.add_command('deluser',   r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_user)
+        self.add_command('listuser', None,  Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_user)
+        self.add_command('adduser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_user)
+        self.add_command('chguser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.change_user)
+        self.add_command('deluser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_user)
 
     def invalid_parameters(self, event, location, command, parameter):
         """
@@ -118,11 +133,10 @@ class Usermgmt(InteractiveModule):
         """
         
         messages = {}
-        messages['listadmin'] = ''
-        messages['addadmin']  = ''
-        messages['deladmin']  = ''
-        messages['adduser']   = 'usage: .adduser '
-        messages['deluser']   = 'usage: .deluser '
+        messages['listuser'] = 'usage: .listuser'
+        messages['adduser']  = 'usage: .adduser ???'
+        messages['chguser']  = 'usage: .chguser ???'
+        messages['deluser']  = 'usage: .deluser ???'
         
         return messages[command]
     
@@ -150,14 +164,18 @@ class Usermgmt(InteractiveModule):
         channel_name = event.parameter[0]
         
         if event.source.nickname == self.me.source.nickname:
-            channel = self.chanlist.request(channel_name)
-            channel.addUser(self.me)
-        
+            user = self.me
+            
         else:
             user = self.userlist.request(event.source)
-            
-            channel = self.chanlist.request(channel_name)
-            channel.addUser(user)
+        
+        self.client.logger.info('User {0} joined {1}'.format(user, channel_name))
+        
+        channel = self.chanlist.request(channel_name)
+        channel.add_user(user)
+        
+        if event.source.nickname != self.me.source.nickname:
+            self.client.send_command(WhoisCmd, event.source.nickname)
     
     def process_part(self, event):
         """
@@ -179,11 +197,17 @@ class Usermgmt(InteractiveModule):
         channel_name = event.parameter[0]
         
         if event.source.nickname == self.me.source.nickname:
+            self.client.logger.info('I am parting {0}'.format(channel_name))
+
             channel = self.chanlist.remove(channel_name)
             
         else:
+            user = self.userlist.get(event.source)
             channel = self.chanlist.get(channel_name)
-            channel.removeUser(event.source.nickname)
+            
+            self.client.logger.info('User {0} parted {1}'.format(user, channel_name))
+            
+            user.remove_channel(channel)
             
     def process_kick(self, event):
         """
@@ -195,8 +219,18 @@ class Usermgmt(InteractiveModule):
         # if user==self, notify someone
         # if user==self, on autorejoin join channel again
 
-        self.process_part(event)
-        pass
+        channel_name = event.parameter[0]
+        
+        if event.source.nickname == self.me.source.nickname:
+            self.client.logger.info('I was kicked from {0}'.format(channel_name))
+
+            sleep(1)
+            self.client.send_command(JoinCmd, channel_name)
+        
+        else:
+            self.client.logger.info('User {0} was kicked from {1}'.format(channel_name))
+            
+            self.process_part(event)
     
     def process_quit(self, event):
         """
@@ -244,63 +278,66 @@ class Usermgmt(InteractiveModule):
         channel = self.chanlist.get(channel_name)
         channel.topic = topic
     
-    def process_names(self, event):
+    def process_userinfo(self, event):
         """
-        Process all incoming NAMES replies.
+        Process all events regarding user information.
         
-        TODO: handle user modes
+        This includes the following events:
+        - NAMES
+        - WHO
+        - WHOIS
+        
+        TODO: NAMES - handle user modes
         """
         
-        channel_name, nicklist = event.parameter[2:4]
+        if event.command == NamesReply.token():
+            channel_name, nicklist = event.parameter[2:4]
+                    
+            channel = self.chanlist.get(channel_name)
+            
+            for nickname in nicklist.split(SPACE):
+                if nickname.startswith(TOKEN_OP):
+                    nickname = nickname[1:]
+                    mode = Channel.USERMODE_OP
+
+                if nickname.startswith(TOKEN_VOICE): 
+                    nickname = nickname[1:]
+                    mode = Channel.USERMODE_VOICE
                 
-        channel = self.chanlist.get(channel_name)
+                else:
+                    mode = None
+                
+                user = self.userlist.request(ClientSource(nickname))
+                
+                channel.add_user(user, mode)
+                
+                if nickname != self.me.source.nickname:
+                    self.client.send_command(WhoisCmd, nickname)
         
-        for nick in nicklist.split(SPACE):
-            if nick.startswith(OP_TOKEN) or nick.startswith(VOICE_TOKEN): 
-                nick = nick[1:]
-            
-            user = self.userlist.request(ClientSource(nick, '', ''))
-            
-            channel.addUser(user)
+        elif event.command == WhoReply.token():
+            print event.parameter
         
-        pass
-    
-    def process_namesend(self, event):
-        """
-        Process additional logic after the NAMES reply has finished.
+        elif event.command == WhoisUserReply.token():
+            print event.parameter
         
-        TODO: send WHO command 
-        """
+        elif event.command == WhoisChannelsReply.token():
+            print event.parameter
         
-        pass
+        elif event.command == WhoisServerReply.token():
+            print event.parameter
         
-    def process_who(self, event):
-        """
-        Process all incoming WHO replies.
-        """
+        elif event.command == WhoisIdleReply.token():
+            print event.parameter
         
-        pass
-        
-    def process_whoend(self, event):
-        """
-        Process additional logic after the WHO reply has finished.
-        """
-        
-        pass
+        elif event.command == WhoisAuthReply.token():
+            print event.parameter
 
     """-------------------------------------------------------------------------
     Authorization
     -------------------------------------------------------------------------"""
-    def list_admin(self, event, location, command, parameter):
+    def list_user(self, event, location, command, parameter):
         return "Adminliste: (not implemented)"
     
-    def add_admin(self, event, location, command, parameter):
-        return "User '???' wurde als Admin hinzugefügt."
-    
-    def delete_admin(self, event, location, command, parameter):
-        return "User '???' als Admin entfernt."
-        return "User '???' befindet sich nicht in der Liste."
-
     def add_user(self, event, location, command, parameter):
         """
         .adduser [password]
@@ -310,9 +347,10 @@ class Usermgmt(InteractiveModule):
         
         try:
             user = self.getAuth(event.source)
+            return "User '???' wurde als Admin hinzugefügt."
         
             if not user:
-                raise UserNotAuthed
+                raise UserNotAuthenticated
             
             if self.isPrivateUser(user):
                 raise UserExists
@@ -324,11 +362,47 @@ class Usermgmt(InteractiveModule):
         except DatabaseError:
             return "Fehler beim der Accounterstellung!"
         
-        except UserNotAuthed:
+        except UserNotAuthenticated:
             return "Du bist nicht geauthed!"
         
         except UserExists:
             return "Du hast bereits einen Account!"
         
         return "Dein Account wurde erstellt!"
+    
+    def change_user(self, event, location, command, parameter):
+        pass
 
+    def delete_user(self, event, location, command, parameter):
+        return "User '???' als Admin entfernt."
+        return "User '???' befindet sich nicht in der Liste."
+
+class Role(object):
+    """
+    Represent a role neccessary to execute a InteractiveModuleCommand.
+    
+    TODO: need real object here or maybe move to own python module?
+    """
+    
+    USER  = 1 # Right.USER
+    ADMIN = 3 # Right.USER | Right.ADMIN
+    
+    def __init__(self):
+        """
+        This class may currently not be instantiated. 
+        """
+        
+        raise NotImplementedError
+    
+    @staticmethod
+    def valid(required, role):
+        """
+        Check whether the user role contains sufficient rights.
+        
+        @param required: The minimum rights to validate.
+        @param role: The actual rights.
+        
+        @return True if there are sufficient rights, False otherwise.
+        """
+        
+        return (required & role == required) 
