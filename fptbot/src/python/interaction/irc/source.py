@@ -67,7 +67,7 @@ class ClientSource(Source):
     A IRC client source entity.
     """
     
-    def __init__(self, nickname, ident, host):
+    def __init__(self, nickname, ident='', host=''):
         """
         Create a new instance.
         
