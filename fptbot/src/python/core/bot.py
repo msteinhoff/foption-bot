@@ -33,7 +33,7 @@ __version__ = '$Rev$'
 from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
 
-from persistence.file        import File
+from persistence.file        import FilePersistence
 from core.config             import Config
 from interaction.interaction import Interaction
 from interaction.irc.client  import Client
@@ -43,16 +43,6 @@ class Bot(object):
     Provide general functionality and start all subsystems.
     """
     
-    class BotConfig(Config):
-        def name(self):
-            return 'core.bot'
-            
-        def valid_keys(self):
-            return []
-        
-        def default_values(self):
-            return {}
-
     def __init__(self):
         """
         Initialize the bot.
@@ -60,9 +50,9 @@ class Bot(object):
         
         basicConfig(level=DEBUG)
         
-        self._persistence = File()
+        self._persistence = FilePersistence()
         
-        self._config = self.BotConfig(self.getPersistence())
+        self._config = BotConfig(self.getPersistence())
         
         self._interaction = {}
         self._interaction['irc'] = Client
@@ -107,3 +97,13 @@ class Bot(object):
             self._processes[name].start()
         
         self.getLogger().info('startup completed')
+
+class BotConfig(Config):
+    def name(self):
+        return 'core.bot'
+        
+    def valid_keys(self):
+        return []
+    
+    def default_values(self):
+        return {}

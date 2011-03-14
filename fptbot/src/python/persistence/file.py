@@ -30,15 +30,17 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from cPickle import dump
-from cPickle import load
+from cPickle import dump, load
 
 from persistence import Persistence
 
-class File(Persistence):
+class FilePersistence(Persistence):
     """
     Provide pickle object persistence to all sub-systems.
     """
+    
+    def __init__(self):
+        pass
 
     def read(self, filename):
         """
