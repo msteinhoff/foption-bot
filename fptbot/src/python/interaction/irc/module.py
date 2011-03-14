@@ -36,14 +36,23 @@ from time import sleep
 from datetime import date
 from threading import Timer
 
-from interaction.irc.message import CHANNEL_TOKEN
+from core.exceptions import BotError
+from interaction.irc.message import CHANNEL_TOKEN, Location
 from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
+"""-----------------------------------------------------------------------------
+Constants
+-----------------------------------------------------------------------------"""
 MIRC_COLOR = '\x03'
 
-class ModuleError(Exception):
-    pass
+"""-----------------------------------------------------------------------------
+Exceptions
+-----------------------------------------------------------------------------"""
+class ModuleError(BotError): pass
 
+"""-----------------------------------------------------------------------------
+Business Logic
+-----------------------------------------------------------------------------"""
 class Module(object):
     """
     Extend the IRC client's functionality.
@@ -159,7 +168,10 @@ class InteractiveModule(Module):
         Module.__init__(self, client)
         
         # cache reference to usermgmt module
-        self.usermgmt = self.client.get_module('usermgmt')
+        if self.__class__.__name__.lower() == 'usermgmt':
+            self.usermgmt = self
+        else:
+            self.usermgmt = self.client.get_module('usermgmt')
         
         self.identifier = self.module_identifier()
         self.command_dict = {}
@@ -234,7 +246,7 @@ class InteractiveModule(Module):
         @param callback: The callback function.
         """
         
-        self.command_dict[keyword] = ModuleCommand(self, keyword, pattern, location, reply, role, callback)
+        self.command_dict[keyword] = InteractiveModuleCommand(self, keyword, pattern, location, reply, role, callback)
     
     def parse(self, event):
         """
@@ -360,25 +372,7 @@ class InteractiveModule(Module):
         
         pass
 
-class InteractiveModuleReply(object):
-    def __init__(self, message=None, identifier=False):
-        self.replies = [message]
-        
-    def add(self, message):
-        self.replies.append(message)
-    
-    def get_all(self):
-        return self.replies
-    
-    def format_all(self, identifier):
-        result = []
-        
-        for reply in self.replies:
-            result.append('{0}: {1}'.format(identifier, reply))
-            
-        return result
-
-class ModuleCommand(object):
+class InteractiveModuleCommand(object):
     """
     Represent a module command that can be triggered by IRC users.
     """
@@ -464,82 +458,21 @@ class ModuleCommand(object):
 
         return arguments
     
-class Role(object):
-    """
-    Represent a role neccessary to execute a ModuleCommand.
-    
-    TODO: need real object here or maybe move to own python module?
-    """
-    
-    USER  = 1 # Right.USER
-    ADMIN = 3 # Right.USER | Right.ADMIN
-    
-    def __init__(self):
-        """
-        This class may currently not be instantiated. 
-        """
+class InteractiveModuleReply(object):
+    def __init__(self, message=None, identifier=False):
+        self.replies = [message]
         
-        raise NotImplementedError
+    def add(self, message):
+        self.replies.append(message)
     
-    @staticmethod
-    def valid(required, role):
-        """
-        Check whether the user role contains sufficient rights.
+    def get_all(self):
+        return self.replies
+    
+    def format_all(self, identifier):
+        result = []
         
-        @param required: The minimum rights to validate.
-        @param role: The actual rights.
-        
-        @return True if there are sufficient rights, False otherwise.
-        """
-        
-        return (required & role == required) 
+        for reply in self.replies:
+            result.append('{0}: {1}'.format(identifier, reply))
+            
+        return result
 
-class Location(object):
-    """
-    Represent a location determining where a ModuleCommand can be executed.
-    
-    TODO: need real object here or maybe move to own python module?
-    """
-    
-    CHANNEL = 1
-    QUERY   = 2
-    BOTH    = CHANNEL | QUERY
-
-    def __init__(self):
-        """
-        This class may currently not be instantiated. 
-        """
-        
-        raise NotImplementedError
-
-    @staticmethod
-    def get(target):
-        """
-        Derive the location from the target.
-        
-        @param target: The target to check.
-        
-        @return CHANNEL If the target starts with a channel token,
-        QUERY otherwise.
-        """
-        
-        if target.startswith(CHANNEL_TOKEN):
-            location = Location.CHANNEL
-        else:
-            location = Location.QUERY
-        
-        return location
-
-    @staticmethod
-    def valid(required, location):
-        """
-        Check whether the location matches the requirements.
-        
-        @param required: The locations that are valid.
-        @param location: The actual location.
-        
-        @return True if the actual location is within the required location,
-        False otherwise.
-        """
-        
-        return (required | location == required)
