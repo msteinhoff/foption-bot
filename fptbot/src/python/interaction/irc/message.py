@@ -216,3 +216,53 @@ class Event(object):
         Create a new Message instance.
         """
         return Message(self.compose())
+
+class Location(object):
+    """
+    Represent a location determining where a ModuleCommand can be executed.
+    
+    TODO: need real object here or maybe move to own python module?
+    """
+    
+    CHANNEL = 1
+    QUERY   = 2
+    BOTH    = CHANNEL | QUERY
+
+    def __init__(self):
+        """
+        This class may currently not be instantiated. 
+        """
+        
+        raise NotImplementedError
+
+    @staticmethod
+    def get(target):
+        """
+        Derive the location from the target.
+        
+        @param target: The target to check.
+        
+        @return CHANNEL If the target starts with a channel token,
+        QUERY otherwise.
+        """
+        
+        if target.startswith(CHANNEL_TOKEN):
+            location = Location.CHANNEL
+        else:
+            location = Location.QUERY
+        
+        return location
+
+    @staticmethod
+    def valid(required, location):
+        """
+        Check whether the location matches the requirements.
+        
+        @param required: The locations that are valid.
+        @param location: The actual location.
+        
+        @return True if the actual location is within the required location,
+        False otherwise.
+        """
+        
+        return (required | location == required)
