@@ -33,7 +33,6 @@ __version__ = '$Rev$'
 
 import re
 
-from hashlib import md5
 from datetime import date, timedelta
 from string import hexdigits
 
