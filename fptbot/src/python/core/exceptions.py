@@ -30,3 +30,4 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+class BotError(Exception): pass
