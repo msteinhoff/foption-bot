@@ -30,8 +30,6 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from interaction.irc.channel import Channel
-from interaction.irc.user    import User
 
 from interaction.irc.message import Event
 from interaction.irc.command import Command
@@ -51,14 +49,7 @@ class Auth(Command):
     def _send(self, username, password):
         self._client.send_irc(Event(None, self.token(), [username, password]))
 
-class QuakenetChannel(Channel):
-    def findUserByAuth(self, auth):
-        for userObject in self._userlist.values():
-            if userObject.auth == auth:
-                return userObject
-
-        return None
-    pass
-
-class QuakenetUser(User):
-    pass
+class WhoisAuthReply(Command):
+    @staticmethod
+    def token():
+        return '330'
