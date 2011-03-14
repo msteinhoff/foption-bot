@@ -43,6 +43,9 @@ class SQLitePersistence(Persistence):
     """
 
     def __init__(self, filename):
+        """
+        """
+        
         self.connection = sqlite3.connect(filename)
 
     def get_connection(self):
