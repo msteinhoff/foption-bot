@@ -803,7 +803,9 @@ class WhoisCmd(Command):
         
         if server is not None:
             parameter.append(server)
-            
+        
+        # add user 2x for extended whois
+        parameter.append(user)
         parameter.append(user)
         
         self.client.send_event(Event(None, self.token(), parameter))
