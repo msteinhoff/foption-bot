@@ -100,6 +100,7 @@ class Usermgmt(InteractiveModule):
             WhoisChannelsReply: self.process_userinfo,
             WhoisServerReply: self.process_userinfo,
             WhoisIdleReply: self.process_userinfo,
+            WhoisAuthReply: self.process_userinfo,
             WhoisEndReply: self.process_userinfo
         })
         
@@ -168,14 +169,16 @@ class Usermgmt(InteractiveModule):
             
         else:
             user = self.userlist.request(event.source)
+            user.set_data('usermgmt.role', Role.USER)
         
         self.client.logger.info('User {0} joined {1}'.format(user, channel_name))
         
         channel = self.chanlist.request(channel_name)
-        channel.add_user(user)
+        user.add_channel(channel, None)
         
         if event.source.nickname != self.me.source.nickname:
             self.client.send_command(WhoisCmd, event.source.nickname)
+            
     
     def process_part(self, event):
         """
@@ -202,12 +205,15 @@ class Usermgmt(InteractiveModule):
             channel = self.chanlist.remove(channel_name)
             
         else:
-            user = self.userlist.get(event.source)
+            user = self.userlist.get(event.source.nickname)
             channel = self.chanlist.get(channel_name)
             
-            self.client.logger.info('User {0} parted {1}'.format(user, channel_name))
+            self.client.logger.info('User {0} left channel {1}'.format(user, channel_name))
             
             user.remove_channel(channel)
+            
+            if len(user.get_channels()) == 0:
+                self.userlist.remove(user.source.nickname)
             
     def process_kick(self, event):
         """
@@ -220,17 +226,31 @@ class Usermgmt(InteractiveModule):
         # if user==self, on autorejoin join channel again
 
         channel_name = event.parameter[0]
+        victim = event.parameter[1]
         
-        if event.source.nickname == self.me.source.nickname:
+        if victim == self.me.source.nickname:
             self.client.logger.info('I was kicked from {0}'.format(channel_name))
 
+            channel = self.chanlist.remove(channel_name)
+            
+            # remove all users that were on the channel we were kicked from
+            for user in self.userlist.get_users().values():
+                if len(user.get_channels()) == 0:
+                    self.userlist.remove(user.source.nickname)
+            
             sleep(1)
-            self.client.send_command(JoinCmd, channel_name)
+            self.client.send_command(JoinCmd, [channel_name])
         
         else:
-            self.client.logger.info('User {0} was kicked from {1}'.format(channel_name))
+            self.client.logger.info('User {0} was kicked from {1} by {2}'.format(victim, channel_name, event.source.nickname))
             
-            self.process_part(event)
+            user = self.userlist.get(victim)
+            channel = self.chanlist.get(channel_name)
+            
+            user.remove_channel(channel)
+            
+            if len(user.get_channels()) == 0:
+                self.userlist.remove(user.source.nickname)
     
     def process_quit(self, event):
         """
@@ -246,7 +266,11 @@ class Usermgmt(InteractiveModule):
             self.chanlist = None
             self.userlist = None
             
+            self.client.logger.info('I have quit from IRC')
+            
         else:
+            self.client.logger.info('User {0} has quit IRC'.format(event.source.nickname))
+            
             self.userlist.remove(event.source)
     
     def process_nick(self, event):
@@ -259,12 +283,19 @@ class Usermgmt(InteractiveModule):
         
         new_nickname = event.parameter[0]
         
+        self.client.logger.info('User {0} is now known as {1}'.format(event.source.nickname, new_nickname))
+        
         self.userlist.rename(event.source.nickname, new_nickname)
-    
+        
     def process_invite(self, event):
         """
         Process all incoming INVITE events.
         """
+        
+        channel_name = ''
+        nickname = ''
+        
+        self.client.logger.info('I were invited into {0} by {1}'.format(channel_name, nickname))
         
         pass
     
@@ -308,8 +339,8 @@ class Usermgmt(InteractiveModule):
                     mode = None
                 
                 user = self.userlist.request(ClientSource(nickname))
-                
-                channel.add_user(user, mode)
+                user.set_data('usermgmt.role', Role.USER)
+                user.add_channel(channel, mode)
                 
                 if nickname != self.me.source.nickname:
                     self.client.send_command(WhoisCmd, nickname)
@@ -318,19 +349,39 @@ class Usermgmt(InteractiveModule):
             print event.parameter
         
         elif event.command == WhoisUserReply.token():
-            print event.parameter
-        
-        elif event.command == WhoisChannelsReply.token():
-            print event.parameter
-        
-        elif event.command == WhoisServerReply.token():
-            print event.parameter
+            nickname = event.parameter[1]
+            ident = event.parameter[2]
+            host = event.parameter[3]
+            realname = event.parameter[5]
+            
+            user = self.userlist.get(nickname)
+            user.source.ident = ident
+            user.source.host = host
+            user.source.realname = realname
+            
+            self.client.logger.info('User information: {0} has Ident {1}, Hostname {2}, Realname {3}'.format(nickname, ident, host, realname))
         
         elif event.command == WhoisIdleReply.token():
-            print event.parameter
+            nickname = event.parameter[1]
+            idle_time = event.parameter[2]
+            signon_time = event.parameter[3]
+            
+            user = self.userlist.get(nickname)
+            user.set_data('usermgmt.idletime', idle_time)
+            user.set_data('usermgmt.signontime', signon_time)
+            
+            self.client.logger.info('User information: {0} has idled {1} seconds'.format(nickname, idle_time))
+            self.client.logger.info('User information: {0} has signed on at {1}'.format(nickname, signon_time))
         
         elif event.command == WhoisAuthReply.token():
-            print event.parameter
+            nickname = event.parameter[1]
+            auth = event.parameter[2]
+            
+            user = self.userlist.get(nickname)
+            user.set_data('usermgmt.role', Role.AUTHENTICATED)
+            user.set_data('usermgmt.auth', auth)
+            
+            self.client.logger.info('User information: {0} is authed as {1}'.format(nickname, auth))
 
     """-------------------------------------------------------------------------
     Authorization
@@ -381,11 +432,16 @@ class Role(object):
     """
     Represent a role neccessary to execute a InteractiveModuleCommand.
     
+    Right.USER   = 1
+    Right.AUTHED = 2
+    Right.ADMIN  = 4
+    
     TODO: need real object here or maybe move to own python module?
     """
     
-    USER  = 1 # Right.USER
-    ADMIN = 3 # Right.USER | Right.ADMIN
+    USER   = 1 # Right.USER
+    AUTHED = 3 # Right.USER | Right.AUTHED
+    ADMIN  = 7 # Right.USER | Right.AUTHED | Right.ADMIN
     
     def __init__(self):
         """
