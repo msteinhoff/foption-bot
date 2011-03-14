@@ -43,6 +43,7 @@ from interaction.irc.message import Message
 from interaction.irc.source  import ClientSource
 from interaction.irc.command import *
 from interaction.irc.channel import User
+from interaction.irc.networks.quakenet import WhoisAuthReply
 
 CRLF = '\x0D\x0A'
 
@@ -51,34 +52,6 @@ class Client(Interaction, async_chat):
     Provide a RFC 2812 compilant IRC client implementation using asyncore.
     """
     
-    class ClientConfig(Config):
-        def name(self):
-            return 'interaction.irc'
-            
-        def valid_keys(self):
-            return [
-                'nickname',
-                'anickname',
-                'realname',
-                'ident',
-                'address',
-                'port',
-                'modules',
-                'channels',
-            ]
-        
-        def default_values(self):
-            return {
-                'nickname'  : 'Bot-test',
-                'anickname' : 'Bot-test-',
-                'realname'  : 'Bot',
-                'ident'     : 'bot',
-                'address'   : 'de.quakenet.org',
-                'port'      : 6667,
-                'modules'   : ['usermgmt'],
-                'channels'  : ['#test']
-            }
-
     def __init__(self, bot):
         """
         Initialize the IRC client.
@@ -94,7 +67,7 @@ class Client(Interaction, async_chat):
         self._commands = {}
         self._modules = {}
         
-        self.config = self.ClientConfig(self._bot.getPersistence())
+        self.config = ClientConfig(self._bot.getPersistence())
         self.logger = self._bot.getLogger(self.config.name())
         
         self.me = User(
@@ -128,7 +101,7 @@ class Client(Interaction, async_chat):
             AwayReply, UniqueOpIsReply, ChannelModeIsReply, InvitingReply,
             TopicReply, NoTopicReply,
             WhoisUserReply, WhoisServerReply, WhoisOperatorReply,
-            WhoisIdleReply, WhoisChannelsReply, WhoisEndReply,
+            WhoisIdleReply, WhoisChannelsReply, WhoisAuthReply, WhoisEndReply,
             WhoReply, WhoEndReply,
             NamesReply, NamesEndReply,
             BanListReply, BanListEndReply,
@@ -148,7 +121,7 @@ class Client(Interaction, async_chat):
         
         @param command: A pointer to the handler class.
         """
-
+        
         instance = command(self)
         
         self._commands[instance.token()] = instance
@@ -430,8 +403,40 @@ class Client(Interaction, async_chat):
         """
         data = ''.join([line.strip(CRLF) for line in data])
         
-        data = unicode(data, 'utf8')
+        try:
+            data = unicode(data, 'utf8')
+        except UnicodeDecodeError:
+            pass
         
         message = Message(data)
         
         self.receive_event(message.create_event())
+    
+class ClientConfig(Config):
+    def name(self):
+        return 'interaction.irc'
+        
+    def valid_keys(self):
+        return [
+            'nickname',
+            'anickname',
+            'realname',
+            'ident',
+            'address',
+            'port',
+            'modules',
+            'channels',
+        ]
+    
+    def default_values(self):
+        return {
+            'nickname'  : 'Bot',
+            'anickname' : 'Bot-',
+            'realname'  : 'Bot',
+            'ident'     : 'bot',
+            'address'   : 'de.quakenet.org',
+            'port'      : 6667,
+            'modules'   : ['usermgmt'],
+            'channels'  : ['#test']
+        }
+
