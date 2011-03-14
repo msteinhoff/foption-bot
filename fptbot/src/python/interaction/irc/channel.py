@@ -153,7 +153,7 @@ class ChannelList(object):
         Return a string representation for debugging purposes.
         """
         
-        return 'ChannelList(Channels={0})'.format('|'.join(self.channels))
+        return 'ChannelList(Channels={0})'.format('|'.join([str(channel) for channel in self.channels.values()]))
     
     def add(self, channel):
         """
@@ -200,9 +200,21 @@ class ChannelList(object):
         
         return self.channels[name]
     
+    def get_channels(self):
+        """
+        Return the current user list of the channel.
+        
+        @return The user list.
+        """
+        
+        return self.channels
+    
     def remove(self, name):
         """
         Remove a channel object from the channel list.
+        
+        This will remove the channel from every user's channel list
+        who had joined chat channel.
         
         @param name: The channel name.
         
@@ -211,7 +223,8 @@ class ChannelList(object):
         
         channel = self.channels[name]
         
-        for user in channel.get_users():
+        for user_tuple in channel.get_users().values():
+            user = user_tuple[0]
             user.remove_channel(channel)
             
         channel = None
@@ -291,7 +304,7 @@ class User(object):
         
         self.source.nickname = new_nickname
 
-    def add_channel(self, channel):
+    def add_channel(self, channel, mode=None):
         """
         Adds a channel to the user.
 
@@ -304,7 +317,7 @@ class User(object):
         if channel in self.channels:
             raise KeyError
         
-        channel.add_user(self)
+        channel.add_user(self, mode)
         self.channels.append(channel)
     
     def get_channel(self, channel):
@@ -342,7 +355,7 @@ class User(object):
         if channel not in self.channels:
             raise KeyError
         
-        channel.remove_user(self)
+        channel.remove_user(self.source.nickname)
         self.channels.remove(channel)
 
 
@@ -369,7 +382,7 @@ class UserList(object):
         Return a string representation for debugging purposes.
         """
 
-        return 'Userlist(Users={0})'.format('|'.join(self.users))
+        return 'Userlist(Users={0})'.format('|'.join([str(user) for user in self.users.values()]))
     
     def add(self, user):
         """
@@ -401,7 +414,7 @@ class UserList(object):
             
             return user
 
-    def get(self, source):
+    def get(self, nickname):
         """
         Return a user object by its nickname.
         
@@ -412,7 +425,16 @@ class UserList(object):
         @raise KeyError if no such user was found.
         """
         
-        return self.users[source.nickname]
+        return self.users[nickname]
+    
+    def get_users(self):
+        """
+        Return the current list of users known to the bot.
+        
+        @return The user list.
+        """
+        
+        return self.users
     
     def rename(self, current_nickname, new_nickname):
         """
@@ -430,7 +452,7 @@ class UserList(object):
         
         del self.users[current_nickname]
     
-    def remove(self, source):
+    def remove(self, nickname):
         """
         Remove a user object by its nickname from the user list.
         
@@ -442,12 +464,12 @@ class UserList(object):
         @raise KeyError if no such user was found.
         """
         
-        user = self.get(source)
+        user = self.get(nickname)
         
         for channel in user.get_channels():
             user.remove_channel(channel)
             
         user = None
             
-        del self.users[source.nickname]
+        del self.users[nickname]
         
