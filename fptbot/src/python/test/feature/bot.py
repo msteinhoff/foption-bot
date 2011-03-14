@@ -30,5 +30,6 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+from test.feature.core.config import TestConfig
 from test.feature.interaction.irc.channel import TestChannel, TestChannellist, TestUser, TestUserlist
 from test.feature.interaction.irc.source import TestServerSource, TestClientSource
