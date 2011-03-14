@@ -97,15 +97,18 @@ class Config(object):
         
         raise NotImplementedError
     
-    def set(self, name, value):
+    def set(self, key, value):
         """
         Set a configuration value.
         
-        @param name: the name of the entry
+        @param key: the name of the entry
         @param value: the value of the entry
         """
         
-        self._keys[name] = value
+        if key not in self.valid_keys():
+            raise ValueError('invalid key')
+        
+        self._keys[key] = value
         
     def get(self, name):
         """
@@ -152,7 +155,7 @@ class Config(object):
         try:
             filename = path.join(DIR_CONFIG, self.name())
                 
-            self.persistence.write(filename, self._keys)
+            self._persistence.write(filename, self._keys)
             
         except IOError:
             # could not save shit dude
