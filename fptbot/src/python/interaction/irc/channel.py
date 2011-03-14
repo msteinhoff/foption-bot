@@ -30,198 +30,13 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from interaction.irc.module import Role
-
-class Channellist(object):
-    """
-    Maintain a list of channels the bot has joined.
-     
-    The information this module contains include 
-    - the channel name
-    - the channel topic
-    - the channel modes
-    - a list of ban bamsks
-    - a list of invite masks
-    - a list of users currently on each channel
-    """
-    
-    def __init__(self):
-        """
-        Initialize the channel list.
-        """
-        
-        self.channels = {}
-    
-    def __str__(self):
-        """
-        Return a string representation for debugging purposes.
-        """
-        
-        return 'Channellist(Channels={0})'.format('|'.join(self.channels))
-    
-    def add(self, channel):
-        """
-        Add a channel object to the channel list.
-        
-        If the channel object exists, it will be overwritten.
-        
-        @param channel: A channel object.
-        """
-        
-        self.channels[channel.name] = channel
-    
-    def get(self, name):
-        """
-        Return a channel object from the channel list.
-        
-        @param name: The channel name.
-        
-        @return A channel object.
-        
-        @raise KeyError If the channel does not exist.
-        """
-        
-        return self.channels[name]
-    
-    def request(self, name):
-        """
-        Request a channel from the channel list by name.
-        
-        If the channel does not exist, it will be created and returned.
-        
-        @param name: The channel name.
-        
-        @return A channel object.
-        """
-        
-        try:
-            return self.get(name)
-        
-        except KeyError:
-            channel = Channel(name)
-            
-            self.add(channel)
-            
-            return channel
-    
-    def remove(self, name):
-        """
-        Remove a channel object from the channel list.
-        
-        @param name: The channel name.
-        
-        @raise KeyError If the channel does not exist.
-        """
-        
-        del self.channels[name]
-        
-class Userlist(object):
-    """
-    Provide a List with User entities that are known to the bot. Each
-    user on a given IRC network only exists once in this list, even if
-    the user shares multiple channels with the bot.
-    
-    Every channel is also maintaining a user list, but only uses
-    references to Userlist objects.
-    """
-    
-    def __init__(self):
-        """
-        Create an empty user list.
-        """
-        
-        self.users = {}
-        
-    def __str__(self):
-        """
-        Return a string representation for debugging purposes.
-        """
-
-        return 'Userlist(Users={0})'.format('|'.join(self.users))
-    
-    def add(self, user):
-        """
-        Add a new User object to the list.
-        
-        @param user: The user object.
-        """
-        
-        self.users[user.source.nickname] = user
-        
-    def get(self, source):
-        """
-        Return a user object by its nickname.
-        
-        @param source: The source object of the user.
-        
-        @return The user object, if existent.
-        
-        @raise KeyError if no such user was found.
-        """
-        
-        return self.users[source.nickname]
-    
-    def request(self, source, realname=''):
-        """
-        Request a user from the user list by source.
-        
-        If the user object does not exist, it will be created and returned.
-        
-        @param name: The channel name.
-        
-        @return A channel object.
-        """
-        
-        try:
-            return self.get(source)
-        
-        except KeyError:
-            user = User(source, realname)
-            
-            self.add(user)
-            
-            return user
-
-    def rename(self, current_nickname, new_nickname):
-        """
-        Changes the nickname of a user.
-        
-        @param current_nickname: The current nickname of the user
-        @param new_nickname: The new nickname of the user
-        """
-        
-        user = self.users[current_nickname]
-        
-        user.rename(new_nickname)
-        
-        self.users[new_nickname] = user
-        
-        del self.users[current_nickname]
-    
-    def remove(self, source):
-        """
-        Remove a user object by its nickname from the user list.
-        
-        Any references to channels the user had joined are also
-        removed.
-        
-        @param source: The source object of the user.
-        
-        @raise KeyError if no such user was found.
-        """
-        
-        for channel in self.users[source.nickname].get_channels():
-            channel.remove_user(source.nickname)
-            
-        del self.users[source.nickname]
-        
 class Channel(object):
     """
     A channel entity.
     """
     
-    MODE_OP    = 1
-    MODE_VOICE = 2
+    USERMODE_OP    = 1
+    USERMODE_VOICE = 2
     
     def __init__(self, name):
         """
@@ -230,17 +45,16 @@ class Channel(object):
         
         self.name = name
         self.topic = ''
-        self.modes = []
-        self.banlist = []
-        self.invitelist = []
+        
         self.users = {}
+        self.modes = []
         
     def __str__(self):
         """
         Return a string representation for debugging purposes.
         """
         
-        return 'Channel(Name={0},Users={1})'.format(self.name, '|'.join(self.users))
+        return 'Channel(Name={0}, Users={1})'.format(self.name, '|'.join(self.users))
         
     def get_modes(self):
         """
@@ -252,16 +66,14 @@ class Channel(object):
     def add_user(self, user, mode=None):
         """
         Add a user object to the channel.
-        The user object is notified about being added to the channel. 
         
         @param user: The user object.
         @param mode: The user mode in the channel.
         """
         
         self.users[user.source.nickname] = (user, mode)
-        user.add_channel(self)
         
-    def update_user_mode(self, nickname, mode):
+    def set_user_mode(self, nickname, mode):
         """
         Updates the user mode.
         
@@ -278,11 +90,9 @@ class Channel(object):
         @param nickname: The nickname of the user object.
         """
         
-        entity = self.users[nickname]
-        
-        return entity[0]
+        return self.users[nickname][0]
     
-    def get_user_list(self):
+    def get_users(self):
         """
         Return the current user list of the channel.
         
@@ -315,9 +125,100 @@ class Channel(object):
         @param nickname: The nickname of the user.
         """
         
-        self.users[nickname].remove_channel(self)
         del self.users[nickname]
+        
+class ChannelList(object):
+    """
+    Maintain a list of channels the bot has joined.
+     
+    The information this module contains include 
+    - the channel name
+    - the channel topic
+    - the channel modes
+    - a list of ban bamsks
+    - a list of invite masks
+    - a list of users currently on each channel
+    """
+    
+    def __init__(self, client):
+        """
+        Initialize the channel list.
+        """
+        
+        self.client = client
+        self.channels = {}
+    
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+        
+        return 'ChannelList(Channels={0})'.format('|'.join(self.channels))
+    
+    def add(self, channel):
+        """
+        Add a channel object to the channel list.
+        
+        If the channel name exists, it will be overwritten.
+        
+        @param channel: A channel object.
+        """
+        
+        self.channels[channel.name] = channel
+    
+    def request(self, name):
+        """
+        Request a channel from the channel list by name.
+        
+        If the channel does not exist, it will be created and returned.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        """
+        
+        try:
+            return self.get(name)
+        
+        except KeyError:
+            channel = Channel(name)
+            
+            self.add(channel)
+            
+            return channel
+    
+    def get(self, name):
+        """
+        Return a channel object from the channel list.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        
+        @raise KeyError If the channel does not exist.
+        """
+        
+        return self.channels[name]
+    
+    def remove(self, name):
+        """
+        Remove a channel object from the channel list.
+        
+        @param name: The channel name.
+        
+        @raise KeyError If the channel does not exist.
+        """
+        
+        channel = self.channels[name]
+        
+        for user in channel.get_users():
+            user.remove_channel(channel)
+            
+        channel = None
+        
+        del self.channels[name]
 
+        
 class User(object):
     AWAY         = 'a'
     INVISIBLE    = 'i'
@@ -338,7 +239,8 @@ class User(object):
         self.source   = source
         self.realname = realname
         self.channels = []
-        self.information = {}
+        self.nicklist = [source.nickname]
+        self.data = {}
         
     def __str__(self):
         """
@@ -353,6 +255,25 @@ class User(object):
             '|'.join(map(str, self.channels))
         )
         
+    def set_data(self, identifier, data):
+        """
+        Set arbitrary information on a per-user basis.
+        
+        @param identifier: The identifier name.
+        @param data: Any python object.
+        """
+        
+        self.data[identifier] = data
+    
+    def get_data(self, identifier):
+        """
+        Retrieve user-based information.
+        
+        @param identifier: The identifier name.
+        """
+        
+        return self.data[identifier]
+
     def rename(self, new_nickname):
         """
         Rename the user.
@@ -364,6 +285,9 @@ class User(object):
         
         for channel in self.channels:
             channel.rename_user(self.source.nickname, new_nickname)
+            
+        if new_nickname not in self.nicklist:
+            self.nicklist.append(new_nickname)
         
         self.source.nickname = new_nickname
 
@@ -378,10 +302,20 @@ class User(object):
         """
         
         if channel in self.channels:
-            return
+            raise KeyError
         
+        channel.add_user(self)
         self.channels.append(channel)
+    
+    def get_channel(self, channel):
+        """
+        Return a channel object by its name.
         
+        @param channel: The name of the channel object.
+        """
+        
+        return self.channel[channel]
+    
     def get_channels(self):
         """
         Return a list of all channels that user and bot have in common.
@@ -389,21 +323,6 @@ class User(object):
         
         return self.channels
     
-    def remove_channel(self, channel):
-        """
-        Removes a channel from the user.
-        
-        This should never be called directly but only by the
-        Channellist module.
-        
-        @param channel: The channel object to remove.
-        """
-        
-        if channel not in self.channels:
-            return
-        
-        self.channels.remove(channel)
-
     def is_on(self, channel):
         """
         Determines whether the user is on the given channel.
@@ -413,25 +332,122 @@ class User(object):
         
         return channel in self.channels
 
-    def set_info(self, module, information):
+    def remove_channel(self, channel):
         """
-        Set module-specific information, e.g. a dictionary or a data
-        object.
+        Removes a channel from the user.
         
-        Each module can have independent information on a per-user
-        basis.
-        
-        @param module: The module name.
-        @param information: Any python object.
+        @param channel: The channel object to remove.
         """
         
-        self.information[module] = information
+        if channel not in self.channels:
+            raise KeyError
+        
+        channel.remove_user(self)
+        self.channels.remove(channel)
+
+
+class UserList(object):
+    """
+    Provide a List with User entities that are known to the bot. Each
+    user on a given IRC network only exists once in this list, even if
+    the user shares multiple channels with the bot.
     
-    def get_info(self, module):
+    Every channel is also maintaining a user list, but only uses
+    references to Userlist objects.
+    """
+    
+    def __init__(self, client):
         """
-        Retrieve module-specific information.
-        
-        @param module: The module name.
+        Create an empty user list.
         """
         
-        return self.information[module]
+        self.users = {}
+        self.client = client
+        
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+
+        return 'Userlist(Users={0})'.format('|'.join(self.users))
+    
+    def add(self, user):
+        """
+        Add a new User object to the list.
+        
+        @param user: The user object.
+        """
+        
+        self.users[user.source.nickname] = user
+        
+    def request(self, source, realname=''):
+        """
+        Request a user from the user list by source.
+        
+        If the user object does not exist, it will be created and returned.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        """
+        
+        try:
+            return self.get(source)
+        
+        except KeyError:
+            user = User(source, realname)
+            
+            self.add(user)
+            
+            return user
+
+    def get(self, source):
+        """
+        Return a user object by its nickname.
+        
+        @param source: The source object of the user.
+        
+        @return The user object, if existent.
+        
+        @raise KeyError if no such user was found.
+        """
+        
+        return self.users[source.nickname]
+    
+    def rename(self, current_nickname, new_nickname):
+        """
+        Changes the nickname of a user.
+        
+        @param current_nickname: The current nickname of the user
+        @param new_nickname: The new nickname of the user
+        """
+        
+        user = self.users[current_nickname]
+        
+        user.rename(new_nickname)
+        
+        self.users[new_nickname] = user
+        
+        del self.users[current_nickname]
+    
+    def remove(self, source):
+        """
+        Remove a user object by its nickname from the user list.
+        
+        Any references to channels the user had joined are also
+        removed.
+        
+        @param source: The source object of the user.
+        
+        @raise KeyError if no such user was found.
+        """
+        
+        user = self.get(source)
+        
+        for channel in user.get_channels():
+            user.remove_channel(channel)
+            
+        user = None
+            
+        del self.users[source.nickname]
+        
