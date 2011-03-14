@@ -27,11 +27,11 @@ THE SOFTWARE.
 @since Mar 10, 2011
 @author msteinhoff
 """
-from interaction.irc.source import ServerSource, ClientSource
-
 __version__ = '$Rev$'
 
 import unittest
+
+from interaction.irc.source import ServerSource, ClientSource
 
 class TestServerSource(unittest.TestCase):
     def test_00_instantiation(self):

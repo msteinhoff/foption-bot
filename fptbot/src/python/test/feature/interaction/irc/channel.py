@@ -27,12 +27,13 @@ THE SOFTWARE.
 @since Mar 10, 2011
 @author Mario Steinhoff
 """
-from interaction.irc.source import ClientSource
 
 __version__ = '$Rev$'
 
 import unittest
-from interaction.irc.channel import Channellist, Channel, Userlist, User
+
+from interaction.irc.source import ClientSource
+from interaction.irc.channel import ChannelList, Channel, UserList, User
 
 class TestModule(unittest.TestCase):
     def setUp(self):
@@ -41,8 +42,8 @@ class TestModule(unittest.TestCase):
         self.user = User(self.source, 'Testname')
         self.channel = Channel('#channel')
         
-        self.chanlist = Channellist()
-        self.userlist = Userlist()
+        self.chanlist = ChannelList()
+        self.userlist = UserList()
 
 class TestChannel(TestModule):
     def test_00_instantiation(self):
