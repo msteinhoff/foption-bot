@@ -36,19 +36,19 @@ import re
 from datetime import date, timedelta
 from string import hexdigits
 
-from core.constants import DIR_DB_CALENDAR, TIME_MINUTE
+from core.constants import TIME_MINUTE
 from core.config import Config
-from persistence.sqlite import SQLitePersistence, DatabaseError
+from core.persistence import DatabaseError
 from interaction.irc.command import PrivmsgCmd
-from interaction.irc.module import InteractiveModule, InteractiveModuleReply, ModuleError, Location, Role
-from interaction.irc.modules.usermgmt import UserNotAuthed, UserNotAuthorized, UserInvalid, UserExists
+from interaction.irc.module import InteractiveModule, InteractiveModuleReply, ModuleError, Location
+from interaction.irc.modules.usermgmt import UserNotAuthorized, UserInvalid, UserNotAuthenticated, Role
 
 """-----------------------------------------------------------------------------
 Constants
 -----------------------------------------------------------------------------"""
-CATEGORY_EVENT    = 'EVENT'
+CATEGORY_EVENT = 'EVENT'
 CATEGORY_BIRTHDAY = 'BIRTHDAY'
-CATEGORY_HOLIDAY  = 'HOLIDAY'
+CATEGORY_HOLIDAY = 'HOLIDAY'
 
 REGEX_DATE = re.compile('^(\d{1,2})\.(\d{1,2})\.(\d{4})$')
 REGEX_CATEGORY_DEFAULT = re.compile('(BIRTHDAY|EVENT|HOLIDAY)')
@@ -83,14 +83,22 @@ class Calendar(InteractiveModule):
         return 'Kalender'
     
     def initialize(self):
-        self.config = CalenderConfig(self.client._bot.getPersistence())
+        bot = self.client.bot; 
         
-        self.persistence = CalendarPersistence(self.config.get('dbFile'))
+        bot.register_config(CalenderConfig)
         
+        self.config = bot.get_config(CalenderConfig.identifier)
+        self.logger = bot.get_logger(CalenderConfig.identifier)
+        self.persistence = CalendarPersistence(bot.get_persistence())
+        
+    def start(self):
         self.start_daily_timer(self.config.get('reminderInterval'), self.display_reminder)
         
-    def shutdown(self):
+    def stop(self):
         self.cancel_timer()
+        
+    def shutdown(self):
+        pass
     
     def init_commands(self):
         self.add_command('kalender',  None,       Location.BOTH, PrivmsgCmd, Role.USER, self.display_calendar_address)
@@ -324,7 +332,7 @@ class Calendar(InteractiveModule):
                 user = self.getAuth(event.source)
 
             if user == None:
-                raise UserNotAuthed
+                raise UserNotAuthenticated
             
             if not self.isUser(user):
                 raise UserInvalid
@@ -356,7 +364,7 @@ class Calendar(InteractiveModule):
         except DatabaseError:
             return "Etwas lief schief! Datenbankfehler"
         
-        except UserNotAuthed:  
+        except UserNotAuthenticated:
             return "Du bist nicht geauthed!"
             
         except UserInvalid:
@@ -545,19 +553,16 @@ class Calendar(InteractiveModule):
 Configuration
 -------------------------------------------------------------------------"""
 class CalenderConfig(Config):
-    def name(self):
-        return 'interaction.irc.module.calendar'
+    identifier = 'interaction.irc.module.calendar'
         
     def valid_keys(self):
         return [
-            'dbFile',
             'reminderInterval',
             'calendarUrl',
         ]
     
     def default_values(self):
         return {
-            'dbFile'           : DIR_DB_CALENDAR,
             'reminderInterval' : TIME_MINUTE * 5,
             'calendarUrl'      : '',
         }
@@ -565,7 +570,10 @@ class CalenderConfig(Config):
 """-----------------------------------------------------------------------------
 Persistence
 -----------------------------------------------------------------------------"""
-class CalendarPersistence(SQLitePersistence):
+class CalendarPersistence(object):
+    def __init__(self, persistence):
+        self.persistence = persistence
+    
     def findEventByID(self, eventId):
         cursor = self.get_cursor()
         cursor.execute("SELECT ca.Name, ct.Name FROM CALENDAR AS ca, CATEGORY AS ct WHERE ca.ID=? AND ca.ID=ct.ID", [eventId])
