@@ -31,3 +31,6 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 class BotError(Exception): pass
+
+class ConfigRegisteredError(BotError): pass
+class InteractionRegisteredError(BotError): pass
