@@ -102,6 +102,37 @@ class Module(object):
         
         This will execute additional initialization code in the module
         without overriding the constructor.
+        
+        Code in this method may only initialize data structures.
+        This method MUST NOT start or manipulate any external entity, e.g.
+        start threads, open connections, write files, etc.
+        
+        For manipulation, use start().
+        """
+        pass
+    
+    def start(self):
+        """
+        launch hook.
+        
+        This will execute additional launch code needed at runtime
+        without overriding the constructor.
+        It will be called before any IRC connection is available.
+        
+        Code in this method may  start or manipulate external entities, e.g.
+        start threads, open sockets or files, etc.
+        
+        For initialization, use initialize().
+        """
+        pass
+    
+    def stop(self):
+        """
+        The opposite of start().
+        
+        It will be called after the IRC connection was closed.
+        
+        Stop threads, close sockets or files, etc.
         """
         pass
     
