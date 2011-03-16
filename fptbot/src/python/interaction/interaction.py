@@ -41,7 +41,7 @@ class Interaction(object):
         instance.start()
 
     def __init__(self, bot):
-        self._bot = bot
+        self.bot = bot
     
     def start(self):
         raise NotImplementedError
