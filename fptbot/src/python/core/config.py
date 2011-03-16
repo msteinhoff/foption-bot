@@ -41,14 +41,14 @@ class Config(object):
     TODO: Implement dict-style access for key/value-pairs.
     """
 
-    def __init__(self, persistence):
+    def __init__(self, bot):
         """
         Initialize the configuration.
         
-        @param persistence: The persistence
+        @param bot: The bot instance.
         """
         
-        self._persistence = persistence
+        self._bot = bot
         self._keys  = self._validate(self.default_values())
         
         self.load()
@@ -80,7 +80,11 @@ class Config(object):
         Return the configuration's name.
         """
         
-        raise NotImplementedError
+        try:
+            return self.identifier
+        
+        except KeyError:
+            raise NotImplementedError
     
     def valid_keys(self):
         """
@@ -139,7 +143,7 @@ class Config(object):
         filename = path.join(DIR_CONFIG, self.name())
         
         try:
-            loaded = self._validate(self._persistence.read(filename))
+            loaded = self._validate(self._bot.get_persistence().readobject(filename))
         
             self._keys.update(loaded)
             
@@ -155,7 +159,7 @@ class Config(object):
         try:
             filename = path.join(DIR_CONFIG, self.name())
                 
-            self._persistence.write(filename, self._keys)
+            self._bot.get_persistence().writeobject(filename, self._keys)
             
         except IOError:
             # could not save shit dude
