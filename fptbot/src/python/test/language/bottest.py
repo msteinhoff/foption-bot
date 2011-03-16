@@ -5,15 +5,20 @@ Created on Jan 12, 2011
 '''
 
 
-class Test():
-    def __init__(self):
-        self.test = "ads"
+
+test = {'abc': 'foobar', 'hitler': 'reich'}
+
+print "plain"
+for a in test:
+    print a
     
-    def __str__(self):
-        return self.test
-
-abc = {}
-
-abc['asd'] = (Test(), None)
-
-print abc['asd'][0]
+print ""
+print "items"
+for a in test.items():
+    print a
+    
+print ""
+print "values"
+for a in test.values():
+    print a
+    
