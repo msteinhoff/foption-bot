@@ -33,8 +33,8 @@ __version__ = '$Rev$'
 from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
 
-from persistence.file        import FilePersistence
 from core.config             import Config
+from core.persistence        import Persistence
 from interaction.interaction import Interaction
 from interaction.irc.client  import Client
 
@@ -50,7 +50,7 @@ class Bot(object):
         
         basicConfig(level=DEBUG)
         
-        self._persistence = FilePersistence()
+        self._persistence = Persistence()
         
         self._config = BotConfig(self.getPersistence())
         
