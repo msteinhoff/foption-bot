@@ -54,6 +54,7 @@ class Persistence(object):
         """
         
         self.connection = sqlite3.connect(sqlite_file)
+        self.connection.row_factory = sqlite3.Row
         
     def get_connection(self):
         """
