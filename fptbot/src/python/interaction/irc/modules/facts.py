@@ -39,105 +39,78 @@ from threading import Timer
 from datetime import date, datetime
 from htmlentitydefs import name2codepoint
 
-from core.constants import DIR_DB_FACTS
+from core.constants import TIME_HOUR
 from core.config import Config
 from interaction.irc.module import Module
 from interaction.irc.command import PrivmsgCmd
-
-HOUR_IN_SECONDS = 3600
 
 class Facts(Module):
     """
     This module posts random facts in the channel.
     """
-
-    class FactsConfig(Config):
-        def name(self):
-            return 'interaction.irc.module.facts'
-            
-        def valid_keys(self):
-            return [
-                'startDate',
-                'dbPath',
-                'dbUpdateInterval',
-                'factUrl',
-            ]
-        
-        def default_values(self):
-            return {
-                'startDate'        : date(2010,4,8),
-                'dbFile'           : DIR_DB_FACTS,
-                'dbUpdateInterval' : HOUR_IN_SECONDS * 8,
-                'factUrl'          : '' 
-            }
-
+    
     def initialize(self):
-        self.persistence = self.client._bot.getPersistence()
-        self.config = self.FactsConfig(self.persistence)
-
-        try:
-            self.data = self.persistence.readlines(self.config.get('dbFile'))
-            
-        except:
-            self.data = []
-            
-        self.start_timer(date.today())
-
+        bot = self.client.bot; 
         
-    def start_timer(self, dayToCheck):
-        self.timer = Timer(
-            self.config.get('dbUpdateInterval'),
-            self.timer_event,
-            [dayToCheck]
-        )
-        self.timer.start()
+        bot.register_config(FactsConfig)
+        
+        self.config = bot.get_config(FactsConfig.identifier)
+        self.logger = bot.get_logger(FactsConfig.identifier)
+        self.persistence = FactsPersistence(bot.get_persistence())
+        
+    def start(self):
+        self.start_daily_timer(self.config.get('dbUpdateInterval'), self.update_data)
            
     def shutdown(self):
-        self.Timer.cancel()
+        self.cancel_timer()
     
     def get_receive_listeners(self):
-        return {PrivmsgCmd: self.action}
+        return {PrivmsgCmd: self.post}
     
-
-    def action(self, event):
+    def post(self, event):
         if random.randint(1,88) != 12:
             return
         
         target, message = event.parameter[0:2]
-
-        if (len(self.WissenDB) > 0):
-            Text = self.WissenDB.pop(0).strip().replace("%nbsp;", " ")
-            PrivMsg(Target, "ACTION ist kluK und weiss: '" + Text + "'")
-            
-            list2txtfile(self.WissenDB, self.FilenameDB)
-    
-
-    
-    def timer_event(self, dayWhenStarted):
-        """
-        """
         
-        today = date.today()
+        fact = self.persistence.get_random_fact()
         
-        if (today == dayWhenStarted):
+        if not fact:
             return
         
-        self.update_data()
+        text = 'ACTION ist kluK und weiss: "{0}"'.format(fact)
         
-        self.start_timer(today)
-
-        
+        for channel in self.client.get_module('usermgmt').chanlist.get_channels():
+            self.client.send_command(PrivmsgCmd, channel, text)
+    
     def update_data(self):
         currentLength = len(self.data)
-        
-
-
         if (len(self.WissenDB) > currentLength):
             print ">> 'wissen'-database received " + str(len(self.WissenDB) - length) + " new facts!" 
             list2txtfile(self.WissenDB, self.FilenameDB)
+            Text = self.WissenDB.pop(0).strip().replace("%nbsp;", " ")
                 
+                
+class FactsConfig(Config):
+    identifier = 'interaction.irc.module.facts'
+        
+    def valid_keys(self):
+        return [
+            'startDate',
+            'dbUpdateInterval',
+            'factUrl',
+        ]
+    
+    def default_values(self):
+        return {
+            'startDate'        : date(2010,4,8),
+            'dbUpdateInterval' : TIME_HOUR * 8,
+            'factUrl'          : ''
+        }
 
 class FactPersistence(object):
+    def __init__(self, persistence):
+        self.persistence = persistence
     
     def get_all_facts(self):
         pass
@@ -145,8 +118,6 @@ class FactPersistence(object):
     def get_random_fact(self):
         pass
     
-
-
 class FactInterface(object):
     def get_data(self):
         raise NotImplementedError
