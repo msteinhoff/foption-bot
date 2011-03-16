@@ -37,4 +37,5 @@ __all__ = [
 
     'bot',
     'config',
+    'persistence',
 ]
