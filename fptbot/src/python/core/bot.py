@@ -33,6 +33,8 @@ __version__ = '$Rev$'
 from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
 
+from core.constants          import DB_BOT
+from core.exceptions         import ConfigRegisteredError, InteractionRegisteredError
 from core.config             import Config
 from core.persistence        import Persistence
 from interaction.interaction import Interaction
@@ -50,23 +52,24 @@ class Bot(object):
         
         basicConfig(level=DEBUG)
         
-        self._persistence = Persistence()
+        self._persistence = Persistence(DB_BOT)
         
-        self._config = BotConfig(self.getPersistence())
-        
+        self._config = {}
         self._interaction = {}
-        self._interaction['irc'] = Client
-        
         self._processes = {}
         
-    def getPersistence(self):
+        self.register_config(BotConfig)
+        self.register_interaction('irc', Client)
+        
+        
+    def get_persistence(self):
         """
         Return the persistence instance.
         """
         
         return self._persistence
     
-    def getLogger(self, name=None):
+    def get_logger(self, name=None):
         """
         Return a logger instance.
         
@@ -78,7 +81,25 @@ class Bot(object):
             name = 'core.bot'
             
         return getLogger(name)
-
+    
+    def register_interaction(self, name, clazz):
+        if name in self._interaction:
+            raise InteractionRegisteredError
+        
+        self._interaction[name] = clazz(self)
+        
+    def register_config(self, clazz):
+        if clazz.name in self._config:
+            raise ConfigRegisteredError
+        
+        self._config[clazz.identifier] = clazz(self)
+        
+    def get_config(self, identifier):
+        return self._config[identifier]
+    
+    def get_configs(self):
+        return self._config
+    
     def run(self):
         """
         Start the system.
@@ -97,10 +118,11 @@ class Bot(object):
             self._processes[name].start()
         
         self.getLogger().info('startup completed')
+        
+        
 
 class BotConfig(Config):
-    def name(self):
-        return 'core.bot'
+    identifier = 'core.bot'
         
     def valid_keys(self):
         return []
