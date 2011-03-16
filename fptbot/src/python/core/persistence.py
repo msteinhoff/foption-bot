@@ -30,19 +30,47 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import sqlite3
 from cPickle import dump, load
 
-from persistence import Persistence
+class DatabaseError(Exception):
+    pass
 
-class FilePersistence(Persistence):
+class Persistence(object):
     """
-    Provide pickle object persistence to all sub-systems.
+    Provide persistence to all sub-systems.
+    
+    Currently, the following storage systems are supported:
+        - pickle.dump/pickle.load
+        - file.readlines/file.writelines
+        - sqlite
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, sqlite_file):
+        """
+        Create a new persistence instance.
+        
+        @param sqlite_file: The SQLite database.
+        """
+        
+        self.connection = sqlite3.connect(sqlite_file)
+        
+    def get_connection(self):
+        """
+        Return the SQLite connection instance.
+        """
+        
+        return self.connection
+    
+    def get_cursor(self):
+        """
+        Return a new SQLite cursor.
+        """
+        
+        return self.connection.cursor()
 
-    def read(self, filename):
+
+    def readobject(self, filename):
         """
         Restore a python object from a file.
         
@@ -54,15 +82,12 @@ class FilePersistence(Persistence):
         @return the restored object 
         """
         
-        f = open(filename, 'r')
-        
-        object = load(f)
-        
-        f.close()
+        with open(filename, 'r') as f:
+            object = load(f)
         
         return object
     
-    def write(self, filename, object):
+    def writeobject(self, filename, object):
         """
         Persist a python object to a file.
         
@@ -73,11 +98,8 @@ class FilePersistence(Persistence):
         @param object: The object to serialize.
         """
         
-        f = open(filename, 'w')
-        
-        dump(object, f)
-        
-        f.close()
+        with open(filename, 'w') as f:
+            dump(object, f)
     
     def readlines(self, filename):
         """
@@ -89,11 +111,8 @@ class FilePersistence(Persistence):
         
         @return the sequence.
         """
-        f = open(filename, "r")
-        
-        list = f.readlines()
-        
-        f.close()
+        with open(filename, "r") as f:
+            list = f.readlines()
         
         return list
 
@@ -109,9 +128,8 @@ class FilePersistence(Persistence):
         
         @see file.writelines()
         """
-        f = open(filename, 'w')
-        
-        f.writelines(sequence)
+        with open(filename, 'w') as f:
+            f.writelines(sequence)
         
         f.close()
         
