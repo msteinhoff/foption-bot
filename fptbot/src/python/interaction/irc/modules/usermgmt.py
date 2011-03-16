@@ -31,7 +31,7 @@ THE SOFTWARE.
 from time import sleep
 from hashlib import md5
 
-from persistence.sqlite import DatabaseError
+from core.persistence import DatabaseError
 from interaction.irc.message import SPACE, Location
 from interaction.irc.source import ClientSource
 from interaction.irc.channel import Channel, ChannelList, UserList
