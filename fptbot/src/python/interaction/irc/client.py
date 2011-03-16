@@ -67,8 +67,10 @@ class Client(Interaction, async_chat):
         self._commands = {}
         self._modules = {}
         
-        self.config = ClientConfig(self._bot.getPersistence())
-        self.logger = self._bot.getLogger(self.config.name())
+        self.bot.register_config(ClientConfig)
+
+        self.config = self.bot.get_config(ClientConfig.identifier)
+        self.logger = self.bot.get_logger(ClientConfig.identifier)
         
         self.me = User(
             ClientSource(
@@ -228,6 +230,8 @@ class Client(Interaction, async_chat):
         })
         
         try:
+            [module.start() for module in self._modules] 
+            
             self.create_socket(AF_INET, SOCK_STREAM)
             self.connect((self.config.get('address'), self.config.get('port')))
             
@@ -362,6 +366,8 @@ class Client(Interaction, async_chat):
         self.close()
         
         self.post_disconnect()
+        
+        [module.stop() for module in self._modules]
 
     """-------------------------------------------------------------------------
     Implementation of asynchat methods 
@@ -413,8 +419,7 @@ class Client(Interaction, async_chat):
         self.receive_event(message.create_event())
     
 class ClientConfig(Config):
-    def name(self):
-        return 'interaction.irc'
+    identifier = 'interaction.irc'
         
     def valid_keys(self):
         return [
@@ -436,7 +441,7 @@ class ClientConfig(Config):
             'ident'     : 'bot',
             'address'   : 'de.quakenet.org',
             'port'      : 6667,
-            'modules'   : ['usermgmt'],
+            'modules'   : ['usermgmt', 'calendar', 'facts', 'roll', 'oracle'],
             'channels'  : ['#test']
         }
 
