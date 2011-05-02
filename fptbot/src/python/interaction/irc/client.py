@@ -30,13 +30,11 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from sys       import modules
 from traceback import print_exc
 from socket    import AF_INET, SOCK_STREAM
 from asyncore  import loop
 from asynchat  import async_chat
 
-from core.messages           import message
 from core.config             import Config
 from interaction.interaction import Interaction
 from interaction.irc.message import Message
@@ -185,20 +183,16 @@ class Client(Interaction, async_chat):
         @return The module object.
         """
         
-        moduleName = 'interaction.irc.modules.{0}'.format(name)
+        classname  = 'interaction.irc.modules.{0}.{1}'.format(name, name.capitalize())
         
-        __import__(moduleName, globals(), locals(), [], -1)
-        
-        module = modules[moduleName]
-        
-        clazz = getattr(module, name.capitalize())
+        clazz = self.bot.get_object(classname)
         
         self._modules[name] = clazz(self)
         
         for command, listener in self._modules[name].get_receive_listeners().items():
             self.get_command(command).add_receive_listener(listener)
             
-        return module
+        return self.get_module(name)
             
         
     def get_module(self, name):
@@ -224,14 +218,22 @@ class Client(Interaction, async_chat):
         asyncore event loop.
         """
         
-        self.logger.info(message[20001], {
-            'address' : self.config.get('address'),
-            'port'    : self.config.get('port')
-        })
+        self.logger.info('starting client');
         
         try:
-            [module.start() for module in self._modules] 
+            self.logger.info('starting modules');
             
+            for module_name, module in self._modules.items():
+                self.logger.info('starting module %(name)s', {'name': module_name})
+                module.start()
+                
+            self.logger.info('starting modules done');
+            
+            self.logger.info('connecting to %(address)s:%(port)d', {
+                'address' : self.config.get('address'),
+                'port'    : self.config.get('port')
+            })
+
             self.create_socket(AF_INET, SOCK_STREAM)
             self.connect((self.config.get('address'), self.config.get('port')))
             
@@ -242,7 +244,7 @@ class Client(Interaction, async_chat):
         except:
             """TODO: check which exceptions are caught here
             """
-            self.logger.info.error(message[20002])
+            self.logger.error('starting client failed')
 
     def stop(self):
         """
@@ -252,7 +254,7 @@ class Client(Interaction, async_chat):
         queued messages were sent.
         """
         
-        self.logger.info(message[20003])
+        self.logger.info('closing connection')
         
         self.pre_disconnect()
         
@@ -275,7 +277,7 @@ class Client(Interaction, async_chat):
         self.logger.info('Registering connection, Nickname: {0}, Realname: {1}, Ident: {2}'.format(self.me.source.nickname, self.me.realname, self.me.source.ident))
         
         self.send_command(NickCmd, self.me.source.nickname)
-        self.send_command(UserCmd, self.me.source.ident, self.me.realname)
+        self.send_command(UserCmd, self.me.realname, self.me.source.ident)
     
     def post_connect(self):
         """
@@ -367,7 +369,9 @@ class Client(Interaction, async_chat):
         
         self.post_disconnect()
         
-        [module.stop() for module in self._modules]
+        for module_name, module in self._modules.items():
+            self.logger.info('stopping module %(name)s', {'name': module_name})
+            module.stop()
 
     """-------------------------------------------------------------------------
     Implementation of asynchat methods 
@@ -439,9 +443,8 @@ class ClientConfig(Config):
             'anickname' : 'Bot-',
             'realname'  : 'Bot',
             'ident'     : 'bot',
-            'address'   : 'de.quakenet.org',
+            'address'   : 'irc.example.org',
             'port'      : 6667,
-            'modules'   : ['usermgmt', 'calendar', 'facts', 'roll', 'oracle'],
+            'modules'   : ['usermgmt'],
             'channels'  : ['#test']
         }
-
