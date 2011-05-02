@@ -38,13 +38,13 @@ class Channel(object):
     USERMODE_OP    = 1
     USERMODE_VOICE = 2
     
-    def __init__(self, name):
+    def __init__(self, name, topic=None):
         """
         Initialize a channel.
         """
         
         self.name = name
-        self.topic = ''
+        self.topic = topic or ''
         
         self.users = {}
         self.modes = []
@@ -374,8 +374,8 @@ class UserList(object):
         Create an empty user list.
         """
         
-        self.users = {}
         self.client = client
+        self.users = {}
         
     def __str__(self):
         """
