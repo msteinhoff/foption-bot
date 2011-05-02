@@ -33,8 +33,7 @@ __version__ = '$$'
 
 import random
 
-from interaction.irc.module import InteractiveModule, Location, Role
-from interaction.irc.command import PrivmsgCmd
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand
 
 class Roll(InteractiveModule):
     """
@@ -45,7 +44,9 @@ class Roll(InteractiveModule):
         return 'Rollapparillo'
     
     def init_commands(self):
-        self.add_command(keyword='roll', callback=self.roll, pattern=r'^([\d]+)(?:-([\d]+))?$')
+        return [
+            InteractiveModuleCommand(keyword='roll', callback=self.roll, pattern=r'^([\d]+)(?:-([\d]+))?$', syntaxhint='zahl[-zahl]')
+        ]
     
     def roll(self, event, location, command, parameter):
         if parameter[1]:
@@ -68,6 +69,3 @@ class Roll(InteractiveModule):
         )
         
         return reply
-        
-    def invalid_parameters(self, event, location, command, parameter):
-        return 'usage: .roll zahl[-zahl]'

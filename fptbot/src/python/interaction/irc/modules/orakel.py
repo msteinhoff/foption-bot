@@ -34,8 +34,7 @@ __version__ = '$$'
 import random
 import re
 
-from interaction.irc.module import InteractiveModule, Location, Role
-from interaction.irc.command import PrivmsgCmd
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand
 
 class Orakel(InteractiveModule):
     """
@@ -46,15 +45,17 @@ class Orakel(InteractiveModule):
         return 'Orakel'
     
     def init_commands(self):
-        self.add_command('wer',    None,         Location.CHANNEL, PrivmsgCmd, Role.USER, self.who)
-        self.add_command('decide', '^((.+)$|$)', Location.CHANNEL, PrivmsgCmd, Role.USER, self.decide)
+        return [
+            InteractiveModuleCommand(keyword='wer', callback=self.who),
+            InteractiveModuleCommand(keyword='decide', callback=self.decide, pattern=r'^((.+)$|$)', syntaxhint='[Auswahl1[, [Auswahl2[, ...]]]]')
+        ]
     
     def who(self, event, location, command, parameter):
         channel_name = event.parameter[0]
         
         channel = self.usermgmt.chanlist.get(channel_name)
         
-        user = random.choice(channel.getUserList().keys())
+        user = random.choice(channel.get_users().keys())
         
         reply = 'Meine Wahl fällt auf {0}!'.format(user)
         
@@ -86,11 +87,3 @@ class Orakel(InteractiveModule):
         
         return reply
     
-    def invalid_parameters(self, event, location, command, parameter):
-        if command == 'wer':
-            reply = 'usage: .wer'
-            
-        elif command == 'decide':
-            reply = 'usage: .decide [Auswahl1[, [Auswahl2[, ...]]]]'
-            
-        return reply
