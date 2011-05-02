@@ -56,13 +56,13 @@ class CalendarComponent(Component):
         self.logger = self.bot.get_logger('components.calendar')
         
         self.events = {
-            232: Event(id=232, start=date(2011, 4, 29), end=date(2011, 4, 29), title='baums mutter isn hurensohn', location='phark'),
-            238: Event(id=238, start=date(2011, 4, 30), end=date(2011, 4, 30), title='baums vater isn hurensohn', location='phark'),
-            231: Event(id=231, start=date(2011, 4, 27), end=date(2011, 4, 27), title='baum isn hurensohn', location='phark')
+            232: Event(id=232, start=date(2011, 4, 29), end=date(2011, 4, 29), title='test1', location='phark'),
+            238: Event(id=238, start=date(2011, 4, 30), end=date(2011, 4, 30), title='test2', location='phark'),
+            231: Event(id=231, start=date(2011, 4, 27), end=date(2011, 4, 27), title='test3', location='phark')
         }
     
     def find_calendars(self):
-        return [Calendar(id=1, name='foption', type=Calendar.MANUAL)]
+        return [Calendar(id=1, name='test', type=Calendar.MANUAL)]
     
     def find_event_by_id(self, eventId):
         if eventId == None:
