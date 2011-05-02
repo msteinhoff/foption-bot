@@ -55,9 +55,9 @@ message[01001] = 'unable to save configuration'
 message[01002] = 'configuration loaded'
 message[01003] = 'unable to load configuration: config file was found'
 
-message[20001] = 'trying to connect to %(address)s:%(port)d'
-message[20002] = 'connection failed'
-message[20003] = 'closing connection'
+message[20001] = ''
+message[20002] = ''
+message[20003] = ''
 message[20005] = ''
 message[20006] = ''
 message[20007] = ''
@@ -70,3 +70,9 @@ message[20013] = ''
 message[20014] = ''
 message[20015] = ''
 message[20016] = ''
+
+#reply.add('deine mutter hat gefailed.')
+#return "OHFUCKOHFUCKOHFUCK Etwas lief schief! Datenbankfehler"
+#return "Error 555!"
+#reply.add('Deine Mutter hat die Datenbank gefressen')
+
