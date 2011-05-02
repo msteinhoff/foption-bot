@@ -30,7 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from core.exceptions import BotError
+from core.bot import BotError
 
 """-----------------------------------------------------------------------------
 Constants
