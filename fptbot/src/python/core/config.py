@@ -40,7 +40,7 @@ class Config(object):
     
     TODO: Implement dict-style access for key/value-pairs.
     """
-
+    
     def __init__(self, bot):
         """
         Initialize the configuration.
@@ -49,11 +49,11 @@ class Config(object):
         """
         
         self._bot = bot
-        self._keys  = self._validate(self.default_values())
         
+        self.init()
         self.load()
         
-    def _validate(self, dict):
+    def filter_valid_keys(self, dict):
         """
         Validate a configuration dictionary against the config structure.
         
@@ -122,6 +122,13 @@ class Config(object):
         """
         
         return self._keys[name]
+    
+    def get_all(self):
+        """
+        Return the complete configuration dictionary.
+        """
+        
+        return self._keys
         
     def delete(self, name):
         """
@@ -131,6 +138,15 @@ class Config(object):
         """
         
         del self._keys[name]
+        
+    def init(self):
+        """
+        Initialize configuration dictionary with default values.
+        
+        Overwrite all current values.
+        """
+        
+        self._keys = self.filter_valid_keys(self.default_values())
 
     def load(self):
         """
@@ -143,7 +159,7 @@ class Config(object):
         filename = path.join(DIR_CONFIG, self.name())
         
         try:
-            loaded = self._validate(self._bot.get_persistence().readobject(filename))
+            loaded = self.filter_valid_keys(self._bot.get_persistence().readobject(filename))
         
             self._keys.update(loaded)
             
