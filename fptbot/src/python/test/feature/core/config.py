@@ -37,12 +37,12 @@ from core.config import Config
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
-        self.persistence = DummyPersistence()
+        self.bot = DummyBot()
         
-        self.config = DummyConfig(self.persistence)
+        self.config = DummyConfig(self.bot)
     
     def test_00_instantiation(self):
-        self.assertTrue(isinstance(self.config._persistence, DummyPersistence))
+        self.assertTrue(isinstance(self.config._bot, DummyBot))
         self.assertTrue(len(self.config._keys) > 0)
         
     def test_01_name(self):
@@ -51,7 +51,7 @@ class TestConfig(unittest.TestCase):
     def test_02_validation(self):
         invalid = {'test5': 'foobar', 'test2' : 42}
         
-        result = self.config._validate(invalid)
+        result = self.config.filter_valid_keys(invalid)
         
         self.assertTrue('test2' in result)
         self.assertTrue('test5' not in result)
@@ -86,30 +86,36 @@ class TestConfig(unittest.TestCase):
         
         filename = '{0}/{1}'.format(DIR_CONFIG, self.config.name())
         
-        self.assertTrue(filename in self.persistence.storage)
-        self.assertEquals(self.persistence.storage[filename]['test1'], 10)
-        self.assertTrue('test10' not in self.persistence.storage[filename])
+        self.assertTrue(filename in self.bot.get_persistence().storage)
+        self.assertEquals(self.bot.get_persistence().storage[filename]['test1'], 10)
+        self.assertTrue('test10' not in self.bot.get_persistence().storage[filename])
     
     def test_07_load(self):
         pass        
 
-class DummyPersistence():
+class DummyBot():
+    def __init__(self):
+        self.persistence = MemoryPersistence()
+    
+    def get_persistence(self):
+        return self.persistence
+
+class MemoryPersistence():
     def __init__(self):
         self.storage = {}
         
-    def read(self, filename):
+    def readobject(self, filename):
         if filename not in self.storage:
             self.storage[filename] = {}
             
         return self.storage[filename]
     
-    def write(self, filename, object):
+    def writeobject(self, filename, object):
         self.storage[filename] = {}
         self.storage[filename].update(object)
 
 class DummyConfig(Config):
-    def name(self):
-        return 'test.core.config'
+    identifier = 'test.core.config'
         
     def valid_keys(self):
         return ['test1', 'test2', 'test3', 'test10', 'test20', 'test30']

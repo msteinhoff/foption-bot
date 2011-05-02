@@ -37,32 +37,31 @@ from interaction.irc.channel import ChannelList, Channel, UserList, User
 
 class TestModule(unittest.TestCase):
     def setUp(self):
-        self.source = ClientSource('Testnick', 'testident', 'testhost.example.org')
+        self.source = ClientSource(nickname='Testnick', ident='testident', host='testhost.example.org')
         
-        self.user = User(self.source, 'Testname')
-        self.channel = Channel('#channel')
+        self.user = User(source=self.source, realname='Testname')
+        self.channel = Channel(name='#channel')
         
-        self.chanlist = ChannelList()
-        self.userlist = UserList()
-
+        self.chanlist = ChannelList(client=None)
+        self.userlist = UserList(client=None)
+        
 class TestChannel(TestModule):
     def test_00_instantiation(self):
         self.assertEquals(self.channel.name, '#channel')
         self.assertEquals(self.channel.users, {})
         
     def test_01_adduser(self):
-        lenbefore = len(self.channel.get_user_list())
-        self.channel.add_user(self.user, None)
-        lenafter = len(self.channel.get_user_list())
+        lenbefore = len(self.channel.get_users())
+        self.channel.add_user(self.user)
+        lenafter = len(self.channel.get_users())
         
         self.assertTrue(lenafter-lenbefore == 1)
         self.assertTrue(self.channel.get_user('Testnick') == self.user)
-        self.assertTrue((self.channel in self.user.get_channels()))
         
-    def test_02_getuserlist(self):
+    def test_02_getusers(self):
         self.channel.add_user(self.user, None)
 
-        self.assertTrue('Testnick' in self.channel.get_user_list())
+        self.assertTrue('Testnick' in self.channel.get_users())
         
     def test_03_renameuser(self):
         self.channel.add_user(self.user, None)
