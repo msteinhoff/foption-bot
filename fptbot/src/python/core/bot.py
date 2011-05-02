@@ -34,12 +34,21 @@ from logging         import basicConfig, getLogger, DEBUG
 from multiprocessing import Process
 
 from core.constants          import DB_BOT
-from core.exceptions         import ConfigRegisteredError, InteractionRegisteredError
 from core.config             import Config
 from core.persistence        import Persistence
 from interaction.interaction import Interaction
-from interaction.irc.client  import Client
 
+"""-----------------------------------------------------------------------------
+Exceptions
+-----------------------------------------------------------------------------"""
+class BotError(Exception): pass
+class ConfigRegisteredError(BotError): pass
+class InteractionRegisteredError(BotError): pass
+class ComponentRegisteredError(BotError): pass
+
+"""-----------------------------------------------------------------------------
+Business Logic
+-----------------------------------------------------------------------------"""
 class Bot(object):
     """
     Provide general functionality and start all subsystems.
@@ -53,15 +62,57 @@ class Bot(object):
         basicConfig(level=DEBUG)
         
         self._persistence = Persistence(DB_BOT)
-        
         self._config = {}
         self._interaction = {}
+        self._components = {}
         self._processes = {}
         
         self.register_config(BotConfig)
-        self.register_interaction('irc', Client)
+        self.register_component('calendar', 'components.calendar.CalendarComponent')
+        self.register_interaction('irc', 'interaction.irc.client.Client')
+    
+    def get_object( self, name ):
+        """
+        Returns a reference to the given object.
         
+        The containing module is imported and a reference to the
+        given object is returned.
         
+        Taken from http://stackoverflow.com/questions/452969/does-python-have-
+        an-equivalent-to-java-class-forname
+        
+        @param classname: The fully qualified classname to load
+        
+        @return: A reference to the class object
+        """
+        
+        module_name, _, object_name = name.rpartition('.')
+        
+        m = __import__(module_name, globals(), locals(), [object_name], -1)
+        
+        obj = getattr(m, object_name)
+        
+        return obj
+    
+    """-------------------------------------------------------------------------
+    Logging
+    -------------------------------------------------------------------------"""
+    def get_logger(self, identifier=None):
+        """
+        Return a logger instance.
+        
+        @param identifier: The intended name. If no name is given, a default
+        of 'core.bot' is used.
+        """
+        
+        if identifier == None:
+            identifier = 'core.bot'
+            
+        return getLogger(identifier)
+    
+    """-------------------------------------------------------------------------
+    Persistence
+    -------------------------------------------------------------------------"""
     def get_persistence(self):
         """
         Return the persistence instance.
@@ -69,37 +120,74 @@ class Bot(object):
         
         return self._persistence
     
-    def get_logger(self, name=None):
-        """
-        Return a logger instance.
-        
-        @param name: The intended name. If no name is given, a default
-        of 'core.bot' is used.
-        """
-        
-        if name == None:
-            name = 'core.bot'
-            
-        return getLogger(name)
-    
-    def register_interaction(self, name, clazz):
-        if name in self._interaction:
-            raise InteractionRegisteredError
-        
-        self._interaction[name] = clazz(self)
-        
+    """-------------------------------------------------------------------------
+    Configuration
+    -------------------------------------------------------------------------"""
     def register_config(self, clazz):
+        """
+        @param clazz: 
+        """
+        
         if clazz.name in self._config:
             raise ConfigRegisteredError
         
         self._config[clazz.identifier] = clazz(self)
         
     def get_config(self, identifier):
+        """
+        @param identifier: 
+        """
+        
         return self._config[identifier]
     
     def get_configs(self):
+        """
+        """
+        
         return self._config
     
+    """-------------------------------------------------------------------------
+    Interaction
+    -------------------------------------------------------------------------"""
+    def register_interaction(self, identifier, classname):
+        """
+        @param identifier: 
+        @param clazz: 
+        """
+    
+        if identifier in self._interaction:
+            raise InteractionRegisteredError
+        
+        clazz = self.get_object(classname)
+        
+        self._interaction[identifier] = clazz(self)
+        
+    """-------------------------------------------------------------------------
+    Components
+    -------------------------------------------------------------------------"""
+    def register_component(self, identifier, classname):
+        """
+        @param identifier: 
+        @param clazz: 
+        """
+        
+        if identifier in self._components:
+            raise ComponentRegisteredError
+        
+        clazz = self.get_object(classname)
+        
+        self._components[identifier] = clazz(self)
+        
+    def get_component(self, identifier):
+        """
+        @param identifier: 
+        """
+        
+        return self._components[identifier]
+    
+    """-------------------------------------------------------------------------
+    System
+    -------------------------------------------------------------------------"""
     def run(self):
         """
         Start the system.
@@ -108,18 +196,16 @@ class Bot(object):
         and call their start() method.
         """
         
-        self.getLogger().info('starting the system')
+        self.get_logger().info('starting the system')
         
         for name, object in self._interaction.items():
             #self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
             #self._processes[name].start()
             
-            self._processes[name] = object(self)
+            self._processes[name] = object
             self._processes[name].start()
         
-        self.getLogger().info('startup completed')
-        
-        
+        self.get_logger().info('startup completed')
 
 class BotConfig(Config):
     identifier = 'core.bot'
