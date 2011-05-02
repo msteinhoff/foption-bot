@@ -36,8 +36,9 @@ from time import sleep
 from datetime import date
 from threading import Timer
 
-from core.exceptions import BotError
-from interaction.irc.message import CHANNEL_TOKEN, Location
+from core.bot import BotError
+from objects.principal import Role
+from interaction.irc.message import Location
 from interaction.irc.command import PrivmsgCmd, NoticeCmd
 
 """-----------------------------------------------------------------------------
@@ -49,6 +50,11 @@ MIRC_COLOR = '\x03'
 Exceptions
 -----------------------------------------------------------------------------"""
 class ModuleError(BotError): pass
+class InteractiveModuleError(ModuleError): pass
+class InvalidCommandError(InteractiveModuleError): pass
+class InvalidArgumentError(InteractiveModuleError): pass
+class InvalidLocationError(InteractiveModuleError): pass
+class InvalidRoleError(InteractiveModuleError): pass
 
 """-----------------------------------------------------------------------------
 Business Logic
@@ -149,8 +155,8 @@ class Module(object):
         self.timer = Timer(interval, callback)
         self.timer.start()
     
-    def start_daily_timer(self, checkInterval, callback):
-        self.timer = Timer(checkInterval, self.daily_event, [date.today(), checkInterval, callback])
+    def start_daily_timer(self, interval, callback):
+        self.timer = Timer(interval, self.daily_event, [date.today(), interval, callback])
         self.timer.start()
 
     def cancel_timer(self):
@@ -159,13 +165,13 @@ class Module(object):
         
         self.timer.cancel()
         
-    def daily_event(self, dayWhenStarted, checkInterval, callback):
+    def daily_event(self, dayWhenStarted, interval, callback):
         today = date.today()
         
         if (today != dayWhenStarted):
             callback(today)
         
-        self.start_daily_timer(checkInterval, callback)
+        self.start_daily_timer(interval, callback)
 
 class InteractiveModule(Module):
     """
@@ -206,8 +212,9 @@ class InteractiveModule(Module):
         
         self.identifier = self.module_identifier()
         self.command_dict = {}
-
-        self.init_commands()
+        
+        for command in self.init_commands():
+            self.command_dict[command.keyword] = command
         
         pattern = self.PATTERN_BASE.format(
             self.PATTERN_SEPARATOR.join(self.command_dict)
@@ -265,20 +272,6 @@ class InteractiveModule(Module):
     """-------------------------------------------------------------------------
     Module command handling
     -------------------------------------------------------------------------"""
-    def add_command(self, keyword, pattern, location, reply, role, callback):
-        """
-        Add a command to the internal command dictionary.
-        
-        @param keyword: The keyword that triggers the command.
-        @param pattern: A regex pattern that defines the arguments.
-        @param location: The location where the command can be executed.
-        @param reply: The command the reply should be sent with.
-        @param role: The role the calling user needs to have.
-        @param callback: The callback function.
-        """
-        
-        self.command_dict[keyword] = InteractiveModuleCommand(self, keyword, pattern, location, reply, role, callback)
-    
     def parse(self, event):
         """
         Parse the event and dispatch it to the actual module logic.
@@ -306,9 +299,8 @@ class InteractiveModule(Module):
             return
         
         """---------------------------------------------------------------------
-        Handle command
+        Handle input
         ---------------------------------------------------------------------"""
-
         target, message = event.parameter[0:2]
         
         message_match = self.module_re.search(message)
@@ -317,47 +309,40 @@ class InteractiveModule(Module):
             return
         
         command = message_match.group('command')
+        parameter = message_match.group('parameter') or ''
         
+        location = Location.get(target)
+        role = self.usermgmt.get_role(event.source.nickname)
         command_object = self.command_dict[command]
-        
-        # check location and access
-        # TODO: print error message on insufficient privileges?
-        if not command_object.valid_location(target) or \
-           not command_object.check_access(event.source):
-            return
-        
+            
         """---------------------------------------------------------------------
-        Handle parameter
+        dispatch
         ---------------------------------------------------------------------"""
-        parameter = message_match.group('parameter')
-
-        if parameter is None:
-            parameter = ''
-        
         try:
+            if not Location.valid(required=command_object.location, location=location):
+                raise InvalidLocationError(command_object.location)
+            
+            if not Role.valid(required=command_object.role, role=role):
+                raise InvalidRoleError(command_object.role)
+            
             callback = command_object.callback
             parameter = command_object.match_arguments(parameter)
-        except ValueError:
-            callback = self.invalid_parameters
-            parameter = None
-        
-        """---------------------------------------------------------------------
-        Dispatch
-        ---------------------------------------------------------------------"""
-
-        location = Location.get(target)
-
-        try:
+            
             reply = callback(event, location, command, parameter)
         
+        except InvalidLocationError:
+            return
+        
+        except InvalidRoleError as required_role:
+            reply = 'Nicht genug rechte (benötigt: {0})'.format(required_role)
+        
+        except InvalidArgumentError:
+            reply = 'usage: .{0} {1}'.format(command_object.keyword, command_object.syntaxhint)
+        
         except Exception as ex:
-            """
-            Should not happen, but just in case.
-            
-            TODO: throw stack trace
-            """
-            
-            reply = 'Es ist ein interner Fehler aufgetreten, bitte Admin benachrichtigen.'
+            #Should not happen, but just in case.
+            #TODO: throw stack trace
+            reply = 'Es ist ein interner Fehler aufgetreten, lol opfeeeeeer!'
             
             self.client.logger.error('Unhandled exception "{1}" thrown in {0}'.format(
                 self.__class__.__name__,
@@ -385,13 +370,14 @@ class InteractiveModule(Module):
         @param reply: The reply to send, String or Reply object.
         """
         
-        if isinstance(reply, basestring):
-            reply_string = '{0}: {1}'.format(self.identifier, reply)
-            self.client.send_command(command_object.reply, target, reply_string)
-        else:
+        if hasattr(reply, 'format_all'):
             for reply_string in reply.format_all(self.identifier):
                 self.client.send_command(command_object.reply, target, reply_string)
-                sleep(0.1)
+                sleep(0.2)
+            
+        else:
+            reply_string = '{0}: {1}'.format(self.identifier, reply)
+            self.client.send_command(command_object.reply, target, reply_string)
     
     def invalid_parameters(self, event, command, parameter):
         """
@@ -408,13 +394,12 @@ class InteractiveModuleCommand(object):
     Represent a module command that can be triggered by IRC users.
     """
     
-    def __init__(self, module, keyword, pattern, location, reply, role, callback):
+    def __init__(self, keyword, callback, pattern=None, location=Location.CHANNEL, reply=PrivmsgCmd, role=Role.USER, syntaxhint=None, help=None):
         """
         Initialize the command.
 
         TODO: fallback to privmsg reply instead of raising exception?
         
-        @param module: The module instance the command belongs to.
         @param keyword: The keyword that triggers the command.
         @param pattern: A regex pattern that defines the arguments.
         @param location: The location where the command can be executed.
@@ -426,8 +411,8 @@ class InteractiveModuleCommand(object):
         if reply.token() not in (PrivmsgCmd.token(), NoticeCmd.token()):
             raise ValueError('only Privmsg or Notice are valid replys')
         
-        self.module = module
         self.keyword = keyword
+        self.callback = callback
         
         if pattern:
             self.pattern = re.compile(pattern, re.I)
@@ -437,32 +422,13 @@ class InteractiveModuleCommand(object):
         self.location = location
         self.reply = reply
         self.role = role
-        self.callback = callback
         
-    def valid_location(self, target):
-        """
-        Determine whether the command can be executed in the location.
-        
-        @param target: The location to check against.
-        """
-        
-        return Location.valid(self.location, Location.get(target))
-    
-    def check_access(self, source):
-        """
-        Check if the given source has sufficient access privileges.
-        """
-        
-        user = self.module.usermgmt.userlist.get(source)
-        role = user.getInfo('Privileges')
-        
-        return Role.valid(self.role, role)
+        self.syntaxhint = syntaxhint or ''
+        self.help = help or ''
         
     def match_arguments(self, data):
         """
         Match and extract data according to the object's pattern.
-        
-        TODO: check if KeyError handling can be removed.
         
         @param data: A string.
         
@@ -477,32 +443,42 @@ class InteractiveModuleCommand(object):
         try:
             match = self.pattern.findall(data)
             arguments = match[0]
-        
+            
+            # force tuple for consistent api
+            if type(arguments) != tuple:
+                arguments = (arguments,)
+            
         # TypeError when data can not be matched
         # KeyError when no match was found
         # IndexError when no match was found
-        except TypeError, KeyError:
+        except (TypeError):
             raise ValueError
         
-        except IndexError:
-            raise ValueError
-
+        except (KeyError, IndexError):
+            raise InvalidArgumentError
+        
         return arguments
-    
+
 class InteractiveModuleReply(object):
-    def __init__(self, message=None, identifier=False):
-        self.replies = [message]
+    def __init__(self, message=None):
+        if message == None:
+            self.replies = []
+        else:
+            self.replies = [message]
         
     def add(self, message):
         self.replies.append(message)
+        
+        return self
     
     def get_all(self):
+        
         return self.replies
     
     def format_all(self, identifier):
         result = []
         
-        for reply in self.replies:
+        for reply in self.get_all():
             result.append('{0}: {1}'.format(identifier, reply))
             
         return result
