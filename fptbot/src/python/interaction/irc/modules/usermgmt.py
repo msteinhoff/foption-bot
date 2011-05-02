@@ -32,24 +32,29 @@ from time import sleep
 from hashlib import md5
 
 from core.persistence import DatabaseError
+from objects.principal import Role
 from interaction.irc.message import SPACE, Location
 from interaction.irc.source import ClientSource
 from interaction.irc.channel import Channel, ChannelList, UserList
-from interaction.irc.module import InteractiveModule, ModuleError
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, ModuleError
 from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
-                                    NickCmd, TopicCmd, PrivmsgCmd, InviteCmd,\
+                                    NickCmd, TopicCmd, InviteCmd,\
                                     WhoisCmd, \
                                     NamesReply, NamesEndReply, \
                                     WhoReply, WhoEndReply, \
                                     WhoisChannelsReply, WhoisIdleReply, \
                                     WhoisUserReply, WhoisServerReply, \
                                     WhoisEndReply
-
 from interaction.irc.networks.quakenet import WhoisAuthReply
 
 """-----------------------------------------------------------------------------
 Constants
 -----------------------------------------------------------------------------"""
+KEY_ROLE       = 'usermgmt.role'
+KEY_AUTH       = 'usermgmt.auth'
+KEY_IDLETIME   = 'usermgmt.idletime'
+KEY_SIGNONTIME = 'usermgmt.signontime'
+
 TOKEN_OP    = '@'
 TOKEN_VOICE = '+'
 
@@ -123,10 +128,12 @@ class Usermgmt(InteractiveModule):
         return 'Benutzerverwaltung'
     
     def init_commands(self):
-        self.add_command('listuser', None,  Location.QUERY, PrivmsgCmd, Role.ADMIN, self.list_user)
-        self.add_command('adduser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.add_user)
-        self.add_command('chguser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.change_user)
-        self.add_command('deluser',  r'^$', Location.QUERY, PrivmsgCmd, Role.ADMIN, self.delete_user)
+        return [
+            InteractiveModuleCommand(keyword='listuser', callback=self.list_user, location=Location.QUERY, role=Role.ADMIN),
+            InteractiveModuleCommand(keyword='adduser', callback=self.insert_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$'),
+            InteractiveModuleCommand(keyword='chguser', callback=self.change_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$'),
+            InteractiveModuleCommand(keyword='deluser', callback=self.delete_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$')
+        ]
 
     def invalid_parameters(self, event, location, command, parameter):
         """
@@ -169,7 +176,7 @@ class Usermgmt(InteractiveModule):
             
         else:
             user = self.userlist.request(event.source)
-            user.set_data('usermgmt.role', Role.USER)
+            user.set_data(KEY_ROLE, Role.USER)
         
         self.client.logger.info('User {0} joined {1}'.format(user, channel_name))
         
@@ -339,7 +346,7 @@ class Usermgmt(InteractiveModule):
                     mode = None
                 
                 user = self.userlist.request(ClientSource(nickname))
-                user.set_data('usermgmt.role', Role.USER)
+                user.set_data(KEY_ROLE, Role.USER)
                 user.add_channel(channel, mode)
                 
                 if nickname != self.me.source.nickname:
@@ -367,8 +374,8 @@ class Usermgmt(InteractiveModule):
             signon_time = event.parameter[3]
             
             user = self.userlist.get(nickname)
-            user.set_data('usermgmt.idletime', idle_time)
-            user.set_data('usermgmt.signontime', signon_time)
+            user.set_data(KEY_IDLETIME, idle_time)
+            user.set_data(KEY_SIGNONTIME, signon_time)
             
             self.client.logger.info('User information: {0} has idled {1} seconds'.format(nickname, idle_time))
             self.client.logger.info('User information: {0} has signed on at {1}'.format(nickname, signon_time))
@@ -378,8 +385,8 @@ class Usermgmt(InteractiveModule):
             auth = event.parameter[2]
             
             user = self.userlist.get(nickname)
-            user.set_data('usermgmt.role', Role.AUTHENTICATED)
-            user.set_data('usermgmt.auth', auth)
+            user.set_data(KEY_ROLE, Role.AUTHED)
+            user.set_data(KEY_AUTH, auth)
             
             self.client.logger.info('User information: {0} is authed as {1}'.format(nickname, auth))
 
@@ -389,7 +396,7 @@ class Usermgmt(InteractiveModule):
     def list_user(self, event, location, command, parameter):
         return "Adminliste: (not implemented)"
     
-    def add_user(self, event, location, command, parameter):
+    def insert_user(self, event, location, command, parameter):
         """
         .adduser [password]
         """
@@ -428,37 +435,15 @@ class Usermgmt(InteractiveModule):
         return "User '???' als Admin entfernt."
         return "User '???' befindet sich nicht in der Liste."
 
-class Role(object):
-    """
-    Represent a role neccessary to execute a InteractiveModuleCommand.
-    
-    Right.USER   = 1
-    Right.AUTHED = 2
-    Right.ADMIN  = 4
-    
-    TODO: need real object here or maybe move to own python module?
-    """
-    
-    USER   = 1 # Right.USER
-    AUTHED = 3 # Right.USER | Right.AUTHED
-    ADMIN  = 7 # Right.USER | Right.AUTHED | Right.ADMIN
-    
-    def __init__(self):
-        """
-        This class may currently not be instantiated. 
-        """
+    """-------------------------------------------------------------------------
+    Public API
+    -------------------------------------------------------------------------"""
+    def get_role(self, nickname):
+        user = self.userlist.get(nickname=nickname)
         
-        raise NotImplementedError
-    
-    @staticmethod
-    def valid(required, role):
-        """
-        Check whether the user role contains sufficient rights.
+        try:
+            return user.get_data(identifier=KEY_ROLE)
         
-        @param required: The minimum rights to validate.
-        @param role: The actual rights.
+        except KeyError:
+            return Role.USER
         
-        @return True if there are sufficient rights, False otherwise.
-        """
-        
-        return (required & role == required) 
