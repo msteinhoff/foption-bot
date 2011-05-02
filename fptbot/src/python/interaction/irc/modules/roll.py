@@ -45,7 +45,7 @@ class Roll(InteractiveModule):
         return 'Rollapparillo'
     
     def init_commands(self):
-        self.add_command('roll', r'^([\d]+)(?:-([\d]+))?$', Location.CHANNEL, PrivmsgCmd, Role.USER,  self.roll)
+        self.add_command(keyword='roll', callback=self.roll, pattern=r'^([\d]+)(?:-([\d]+))?$')
     
     def roll(self, event, location, command, parameter):
         if parameter[1]:
