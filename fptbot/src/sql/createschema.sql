@@ -3,18 +3,7 @@
 /******************************************************************************/
 
 /*
- * Create CONFIG table with indizes on PACKGE and KEY (PK)
- */
-CREATE TABLE "CONFIGVALUES" (
-	"PACKAGE"     TEXT NOT NULL,
-	"KEY"         TEXT NOT NULL,
-	"VALUE"       TEXT NOT NULL,
-	
-	PRIMARY KEY ("PACKAGE", "KEY")
-);
-
-/*
- * Create USER table with indizes on ID (PK) and Name
+ * Create USERS table with indizes on ID (PK) and Name
  */
 CREATE TABLE "USERS" (
 	"ID"          INTEGER NOT NULL PRIMARY KEY ASC AUTOINCREMENT,
@@ -36,6 +25,22 @@ CREATE TABLE "NICKNAMES" (
 	PRIMARY KEY ("NICKNAME"),
 	FOREIGN KEY ("USER_ID") REFERENCES "USERS" ("ID")
 );
+
+/*
+ * Create AUDITLOG table with indizes on 
+ */
+CREATE TABLE "AUDITLOG" (
+    "ID"          INTEGER NOT NULL PRIMARY KEY ASC AUTOINCREMENT,
+    "DATETIME"    TEXT    NOT NULL,
+    "PRINCIPAL"   TEXT    NOT NULL,
+    "ACTION"      TEXT    NOT NULL,
+    "DATA_TYPE"   TEXT    NOT NULL,
+    "DATA_BEFORE" TEXT    NULL,
+    "DATA_AFTER"  TEXT    NULL
+);
+
+CREATE INDEX IF NOT EXISTS "IDX_ACTION" ON "AUDITLOG" ("ACTION");
+CREATE INDEX IF NOT EXISTS "IDX_TYPE"   ON "AUDITLOG" ("DATA_TYPE");
 
 /******************************************************************************/
 /* calendar tables                                                            */
@@ -63,28 +68,42 @@ CREATE TABLE "EVENTS" (
 	"G_ETAG"      TEXT    NULL,
 	"DATE_FROM"   TEXT    NOT NULL,
 	"DATE_TO"     TEXT    NOT NULL,
+	"DATE_ALLDAY" INTEGER NOT NULL,
 	"DESCRIPTION" TEXT    NOT NULL,
-	"CREATED"     TEXT    NOT NULL,
-	"CHANGED"     TEXT    NULL,
 	
 	PRIMARY KEY ("ID"),
 	FOREIGN KEY ("CALENDAR_ID") REFERENCES "CALENDARS" ("ID")
 );
 
+CREATE INDEX IF NOT EXISTS "IDX_ETAG" ON "EVENTS" ("G_ETAG");
 CREATE INDEX IF NOT EXISTS "IDX_DATE" ON "EVENTS" ("DATE_FROM", "DATE_TO");
 
 /*
  * Create CONTACTS table with indizes on firstname/lastname (PK) and birthday
  */
 CREATE TABLE "CONTACTS" (
-	"FIRST_NAME"  TEXT    NOT NULL,
-	"LAST_NAME"   TEXT    NOT NULL,
-	"BIRTHDAY"    TEXT    NOT NULL,
+    "FIRSTNAME"   TEXT    NULL,
+    "LASTNAME"    TEXT    NULL,
+    "NICKNAME"    TEXT    NOT NULL,
+    "BIRTHDAY"    TEXT    NOT NULL,
   
-	PRIMARY KEY ("FIRST_NAME", "LAST_NAME")
+    PRIMARY KEY ("FIRSTNAME", "LASTNAME")
 );
 
 CREATE INDEX IF NOT EXISTS "IDX_BIRTHDAY" ON "CONTACTS" ("BIRTHDAY");
+
+/*
+ * Create BACKEND_MAPPING table with indizes on BACKEND, TYPE and LOCAL_ID
+ */
+
+CREATE TABLE "BACKEND_MAPPING" (
+    "BACKEND"     TEXT    NOT NULL,
+    "DATA_TYPE"   TEXT    NOT NULL,
+    "LOCAL_ID"    INTEGER NOT NULL,
+    "REMOTE_ID"   INTEGER NOT NULL,
+    
+    PRIMARY KEY ("BACKEND", "DATA_TYPE", "LOCAL_ID")
+);
 
 /******************************************************************************/
 /* facts tables                                                               */

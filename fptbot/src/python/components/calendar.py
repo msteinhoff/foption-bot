@@ -109,7 +109,200 @@ class CalendarComponent(Component):
             del(self.events[eventId])
         except KeyError:
             raise InvalidEventId
+
+# ------------------------------------------------------------------------------
+# Data management
+# ------------------------------------------------------------------------------
+class DataStore():
+    """
+    The calendar data store.
+    
+    The data store manages all backend systems and data synchronization
+    between the primary and secondary backends.
+    """
+
+    def set_primary_backend(self, backend):
+        """
+        Set a backend object as the primary backend.
         
+        @param backend: The backend instance.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def notify_primary_backend(self, source, operation, type, id):
+        """
+        Notify the primary backend about a data change.
+        
+        When a change at one of the the secondary backends occurs, the
+        primay backend is notified about the change.  It will first update
+        itself with the changed data and then propagate the changed data to
+        all other secondary backends except the initiating one.
+        
+        A change can be a insert, update or delete operation.
+        
+        @param source: The backend that initiated the change.
+        @param operation: The change mode, can be insert, update or delete.
+        @param type: The data type of the changed object.
+        @param id: The id of the changed object.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def register_secondary_backend(self, backend):
+        """
+        Register a backend object as a secondary backend.
+        
+        @param backend: The backend instance.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def notify_secondary_backends(self, operation, type, id):
+        """
+        Notify all secondary backends about a data change.
+        
+        When a change at the primary backend occurs, the secondary backends
+        are notified about the change. They can either ignore the change
+        or fetch the changed object using the provided data type and id.
+        
+        A change can be a insert, update or delete operation.
+        
+        @param operation: The change mode, can be insert, update or delete.
+        @param type: The data type of the changed object.
+        @param id: The id of the changed object.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def find_objects(self, object):
+        """
+        Find objects with the given search criteria in the primary backend.
+        Wildcards can be used.
+        
+        TODO: advanced find using sql queries.
+        
+        @param object: The object with search criteria.
+        
+        @return A list with matches. List will be empty if nothing was found.
+        """
+        
+        raise NotImplementedError
+    
+    def create_object(self, object):
+        """
+        Create a new object in the registered primary/secondary backends.
+        
+        @param object: The object to create.
+        
+        @return The given object with a populated id attribute.
+        """
+        
+        raise NotImplementedError
+    
+    def update_object(self, object):
+        """
+        Update an existing object in the registered primary/secondary backends.
+        
+        @param object: The object to update.
+        """
+        
+        raise NotImplementedError
+    
+    def remove_object(self, type, id):
+        """
+        Delete an existing object in the registered primary/secondary backends.
+        
+        @param type: The data type of the object to delete.
+        @param id: The id of the object to delete.
+        """
+        
+        raise NotImplementedError
+
+class Backend():
+    """
+    A generic backend.
+    """
+    def __init__(self):
+        """
+        Instantiate the backend.
+        """
+        
+        self.datastore = None
+        
+    def set_datastore(self, datastore):
+        """
+        Set the current datastore to work with.
+        
+        @param datastore: The datastore instance.
+        """
+        
+        self.datastore = datastore
+    
+    def handle_incoming_change(self, source, operation, type, id):
+        """
+        Respond to a data change.
+        
+        @param source: The backend where the change occured.
+        @param operation: The change mode, can be insert, update or delete.
+        @param type: The data type of the changed object.
+        @param id: The id of the changed object.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def create_object(self, object):
+        """
+        Create a new data object.
+        
+        @param object: The object to create.
+        
+        @return The given object with a populated id attribute.
+        """
+        
+        raise NotImplementedError
+    
+    def update_object(self, object):
+        """
+        Update an existing object.
+        
+        @param object: The object to update.
+        """
+        
+        raise NotImplementedError
+    
+    def remove_object(self, type, id):
+        """
+        Delete an existing object.
+        
+        @param type: The data type of the object to delete.
+        @param id: The id of the object to delete.
+        """
+        
+        raise NotImplementedError
+
+
+
+class SqliteBackend(Backend):
+    def set_cursor(self):
+        pass
+
+class GoogleBackend(Backend):
+    pass
+
+class FacebookBackend(Backend):
+    pass
+
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------
@@ -129,4 +322,3 @@ class CalenderComponentConfig(Config):
             'gdata-password' : '',
             'gdata-token'    : ''
         }
-

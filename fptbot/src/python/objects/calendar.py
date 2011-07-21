@@ -40,21 +40,22 @@ class Calendar(object):
         self.type = type
         
     def __str__(self):
-        return ''
+        return 'Calendar(id=%s,name=%s|type=%s)'.format(self.id, self.name, self.type)
 
 class Event(object):
-    def __init__(self, id=None, calendar=None, etag=None, start=None, end=None, title=None, description=None, location=None):
+    def __init__(self, id=None, calendar=None, etag=None, start=None, end=None, allday=None, title=None, description=None, location=None):
         self.id = id
         self.calendar = calendar
         self.etag = etag
         self.start = start
         self.end = end
+        self.allday = allday
         self.title = title
         self.description = description
         self.location = location
         
     def __str__(self):
-        return ''
+        return 'Event(id=%s|calendar=%s|etag=%s|start=%s|end=%s|title=%s)'.format(self.id, self.calendar, self.etag, self.start, self.end, self.title)
 
 class Contact(object):
     def __init__(self, id=None, firstname=None, lastname=None, nickname=None, birthday=None):
@@ -65,7 +66,7 @@ class Contact(object):
         self.birthday = birthday
         
     def __str__(self):
-        return ''
+        return 'Contact(id=%s|firstname=%s|lastname=%s|nickname=%s|birthday=%s)'.format(self.id, self.firstname, self.lastname, self.nickname, self.birthday)
 
 class AuditEntry(object):
     def __init__(self, id=None, datetime=None, principal=None, action=None, datatype=None, databefore=None, dataafter=None):
@@ -78,5 +79,5 @@ class AuditEntry(object):
         self.dataafter = dataafter
         
     def __str__(self):
-        return ''
+        return 'AuditEntry(id=%s|datetime=%s|principal=%s|action=%s|datatype=%s)'.format(self.id, self.datetime, self.principal, self.action, self.datatype)
     
