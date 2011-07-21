@@ -24,9 +24,55 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since Mar 10, 2011
+@since May 6, 2011
 @author Mario Steinhoff
 """
 
 __version__ = '$Rev$'
+
+import datetime
+import threading
+
+class BaseTimer(object):
+    def __init__(self, interval=None, callback=None):
+        self.interval = interval
+        self.callback = callback
+
+
+class SingleTimer(BaseTimer):
+    def start(self):
+        if hasattr(self, 'timer') and self.timer:
+            self.stop()
+        
+        self.timer = threading.Timer(self.interval, self.callback)
+        self.timer.start()
+    
+    def stop(self):
+        self.timer.stop()
+
+
+class DailyTimer(BaseTimer):
+    def start(self):
+        if hasattr(self, 'timer') and self.timer:
+            self.stop()
+        
+        self.timer = threading.Timer(self.interval, self._check, [datetime.date.today()])
+        self.timer.start()
+    
+    def stop(self):
+        self.timer.stop()
+    
+    def _check(self, start):
+        today = datetime.date.today()
+        
+        if today != start:
+            self.callback(today)
+        
+        self.start()
+
+
+timer_map = {
+    'single': SingleTimer,
+    'daily': DailyTimer
+}
 

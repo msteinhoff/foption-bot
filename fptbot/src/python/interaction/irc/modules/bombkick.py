@@ -1,37 +1,32 @@
 # -*- coding: UTF-8 -*-
+"""
+$Id$
 
-'''
-Created on 01.05.2010
+$URL$
 
-@author: rack
-'''
+Copyright (c) 2010 foption
 
-import re
-import random
-from threading import Timer
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-from copy import deepcopy
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
-class Roll(SimpleInteractiveModule):
-    def module_identifier(self):
-        return 'Bombkick'
-    
-    def command_string(self):
-        return 'b'
-    
-    def parameter_mask(self):
-        return r'([\d]+)(?:-([\d]+))?$'
-    
-    def get_receive_listeners(self):
-        return {
-            Privmsg: self.parse
-        }
-    
-    def handle_valid(self, event, target, parameters):
-
-
-
+@since May 01, 2010
+@author rack
+"""
 
 class Bombkick():
     regexpattern = r':(.+) PRIVMSG ([\S]+) :(?:(\.schwarz|\.rot|\.gelb|\.blau|\.weiss|\.lila)|\.bombkick(?:$| ([\S]+)$)|(.bombstats))'

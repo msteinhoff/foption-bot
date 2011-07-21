@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Mar 10, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 __version__ = '$Rev$'
 

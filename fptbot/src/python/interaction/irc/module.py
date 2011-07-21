@@ -31,24 +31,20 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import re
-
-from time import sleep
-from datetime import date
-from threading import Timer
+import time
 
 from core.bot import BotError
 from objects.principal import Role
-from interaction.irc.message import Location
-from interaction.irc.command import PrivmsgCmd, NoticeCmd
+from objects.irc import Location
 
-"""-----------------------------------------------------------------------------
-Constants
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
 MIRC_COLOR = '\x03'
 
-"""-----------------------------------------------------------------------------
-Exceptions
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Exceptions
+#-------------------------------------------------------------------------------
 class ModuleError(BotError): pass
 class InteractiveModuleError(ModuleError): pass
 class InvalidCommandError(InteractiveModuleError): pass
@@ -56,9 +52,9 @@ class InvalidArgumentError(InteractiveModuleError): pass
 class InvalidLocationError(InteractiveModuleError): pass
 class InvalidRoleError(InteractiveModuleError): pass
 
-"""-----------------------------------------------------------------------------
-Business Logic
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
 class Module(object):
     """
     Extend the IRC client's functionality.
@@ -84,9 +80,9 @@ class Module(object):
     def __del__(self):
         self.shutdown()
 
-    """-------------------------------------------------------------------------
-    IRC interface 
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # irc interface
+    #---------------------------------------------------------------------------
     def get_receive_listeners(self):
         """
         Return a mapping between commands and callback functions.
@@ -99,9 +95,9 @@ class Module(object):
         """
         raise NotImplementedError
     
-    """-------------------------------------------------------------------------
-    State handling
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # state handling
+    #---------------------------------------------------------------------------
     def initialize(self):
         """
         Initialization hook.
@@ -114,6 +110,15 @@ class Module(object):
         start threads, open connections, write files, etc.
         
         For manipulation, use start().
+        """
+        pass
+    
+    def shutdown(self):
+        """
+        Cleanup hook.
+        
+        This will execute additional cleanup code in the module without
+        overriding the destructor.
         """
         pass
     
@@ -141,37 +146,7 @@ class Module(object):
         Stop threads, close sockets or files, etc.
         """
         pass
-    
-    def shutdown(self):
-        """
-        Cleanup hook.
-        
-        This will execute additional cleanup code in the module without
-        overriding the destructor.
-        """
-        pass
-    
-    def start_timer(self, interval, callback):
-        self.timer = Timer(interval, callback)
-        self.timer.start()
-    
-    def start_daily_timer(self, interval, callback):
-        self.timer = Timer(interval, self.daily_event, [date.today(), interval, callback])
-        self.timer.start()
 
-    def cancel_timer(self):
-        if self.timer == None:
-            return
-        
-        self.timer.cancel()
-        
-    def daily_event(self, dayWhenStarted, interval, callback):
-        today = date.today()
-        
-        if (today != dayWhenStarted):
-            callback(today)
-        
-        self.start_daily_timer(interval, callback)
 
 class InteractiveModule(Module):
     """
@@ -221,20 +196,25 @@ class InteractiveModule(Module):
         )
         
         self.module_re = re.compile(pattern, re.I)
+        
+        self.VALID_TOKENS = (
+            self.client.get_command('Privmsg').token,
+            self.client.get_command('Notice').token
+         )
     
-    """-------------------------------------------------------------------------
-    Overridden methods
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # irc interface
+    #---------------------------------------------------------------------------
     def get_receive_listeners(self):
         """
         Setup default receive listeners needed for Privmsg handling.
         """
         
-        return {PrivmsgCmd: self.parse}
+        return {'Privmsg': self.parse}
 
-    """-------------------------------------------------------------------------
-    Identification and behavior
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # identification and behavior
+    #---------------------------------------------------------------------------
     def module_identifier(self):
         """
         Return a verbose string that identifies the module.
@@ -269,9 +249,9 @@ class InteractiveModule(Module):
         
         raise NotImplementedError
     
-    """-------------------------------------------------------------------------
-    Module command handling
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # interactive command handling
+    #---------------------------------------------------------------------------
     def parse(self, event):
         """
         Parse the event and dispatch it to the actual module logic.
@@ -295,13 +275,15 @@ class InteractiveModule(Module):
         @param event: The Privmsg or Notice event.
         """
         
-        if event.command not in (PrivmsgCmd.token(), NoticeCmd.token()):
-            return
+        if event.command not in self.VALID_TOKENS:
+            raise ValueError('invalid command token')
         
-        """---------------------------------------------------------------------
-        Handle input
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # handle input
+        #-----------------------------------------------------------------------
         target, message = event.parameter[0:2]
+        
+        message = message.strip()
         
         message_match = self.module_re.search(message)
         
@@ -315,9 +297,9 @@ class InteractiveModule(Module):
         role = self.usermgmt.get_role(event.source.nickname)
         command_object = self.command_dict[command]
             
-        """---------------------------------------------------------------------
-        dispatch
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # dispatch
+        #-----------------------------------------------------------------------
         try:
             if not Location.valid(required=command_object.location, location=location):
                 raise InvalidLocationError(command_object.location)
@@ -330,14 +312,18 @@ class InteractiveModule(Module):
             
             reply = callback(event, location, command, parameter)
         
-        except InvalidLocationError:
-            return
+        except InvalidLocationError as required_location:
+            reply = InteractiveModuleReply()
+            reply.use_notice()
+            reply.add_line('Befehl geht nur im {0}'.format(required_location))
         
         except InvalidRoleError as required_role:
-            reply = 'Nicht genug rechte (benötigt: {0})'.format(required_role)
+            reply = InteractiveModuleReply()
+            reply.add_line('Nicht genug rechte (benötigt: {0})'.format(required_role))
         
         except InvalidArgumentError:
-            reply = 'usage: .{0} {1}'.format(command_object.keyword, command_object.syntaxhint)
+            reply = InteractiveModuleReply()
+            reply.add_line('usage: .{0} {1}'.format(command_object.keyword, command_object.syntaxhint))
         
         except Exception as ex:
             #Should not happen, but just in case.
@@ -349,9 +335,9 @@ class InteractiveModule(Module):
                 str(ex)
             ))
         
-        """---------------------------------------------------------------------
-        Send reply
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # send reply
+        #-----------------------------------------------------------------------
         if reply is not None:
             if location == Location.CHANNEL:
                 target = event.parameter[0]
@@ -359,9 +345,9 @@ class InteractiveModule(Module):
             elif location == Location.QUERY:
                 target = event.source.nickname
         
-        self.send_reply(command_object, target, reply)
+        self.send_reply(target, reply)
     
-    def send_reply(self, command_object, target, reply):
+    def send_reply(self, target, reply):
         """
         Send a reply to target.
         
@@ -370,31 +356,27 @@ class InteractiveModule(Module):
         @param reply: The reply to send, String or Reply object.
         """
         
-        if hasattr(reply, 'format_all'):
-            for reply_string in reply.format_all(self.identifier):
-                self.client.send_command(command_object.reply, target, reply_string)
-                sleep(0.2)
+        if hasattr(reply, 'replies') and hasattr(reply, 'type'):
+            sender = self.client.get_command(reply.type).get_sender()
+            sender.target = target
+            
+            for reply in reply.replies:
+                sender.text = '{0}: {1}'.format(self.identifier, reply)
+                sender.send()
+                time.sleep(0.2)
             
         else:
-            reply_string = '{0}: {1}'.format(self.identifier, reply)
-            self.client.send_command(command_object.reply, target, reply_string)
-    
-    def invalid_parameters(self, event, command, parameter):
-        """
-        Handle invalid argument errors.
-        
-        @param command: The command keyword.
-        @param parameter: The raw parameter data.
-        """
-        
-        pass
+            sender = self.client.get_command('Privmsg').get_sender()
+            sender.target = target
+            sender.text = '{0}: {1}'.format(self.identifier, reply)
+            sender.send()
 
 class InteractiveModuleCommand(object):
     """
     Represent a module command that can be triggered by IRC users.
     """
     
-    def __init__(self, keyword, callback, pattern=None, location=Location.CHANNEL, reply=PrivmsgCmd, role=Role.USER, syntaxhint=None, help=None):
+    def __init__(self, keyword, callback, pattern=None, location=Location.CHANNEL, role=Role.USER, syntaxhint=None, help=None):
         """
         Initialize the command.
 
@@ -408,9 +390,6 @@ class InteractiveModuleCommand(object):
         @param callback: The callback function.
         """
         
-        if reply.token() not in (PrivmsgCmd.token(), NoticeCmd.token()):
-            raise ValueError('only Privmsg or Notice are valid replys')
-        
         self.keyword = keyword
         self.callback = callback
         
@@ -420,7 +399,6 @@ class InteractiveModuleCommand(object):
             self.pattern = None
         
         self.location = location
-        self.reply = reply
         self.role = role
         
         self.syntaxhint = syntaxhint or ''
@@ -460,26 +438,21 @@ class InteractiveModuleCommand(object):
         return arguments
 
 class InteractiveModuleReply(object):
-    def __init__(self, message=None):
-        if message == None:
+    def __init__(self, firstline=None):
+        self.use_message()
+        
+        if firstline == None:
             self.replies = []
         else:
-            self.replies = [message]
+            self.replies = [firstline]
         
-    def add(self, message):
-        self.replies.append(message)
+    def add_line(self, line):
+        self.replies.append(line)
         
         return self
     
-    def get_all(self):
+    def use_notice(self):
+        self.type = 'Notice'
         
-        return self.replies
-    
-    def format_all(self, identifier):
-        result = []
-        
-        for reply in self.get_all():
-            result.append('{0}: {1}'.format(identifier, reply))
-            
-        return result
-
+    def use_message(self):
+        self.type = 'Privmsg'

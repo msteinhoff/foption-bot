@@ -28,92 +28,48 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-from time import sleep
-from hashlib import md5
+__version__ = '$Rev$'
 
-from core.persistence import DatabaseError
+import time
+import hashlib
+
 from objects.principal import Role
-from interaction.irc.message import SPACE, Location
+from objects.irc import User, Channel, Location
 from interaction.irc.source import ClientSource
-from interaction.irc.channel import Channel, ChannelList, UserList
+from interaction.irc.message import SPACE
 from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, ModuleError
-from interaction.irc.command import JoinCmd, PartCmd, KickCmd, QuitCmd, \
-                                    NickCmd, TopicCmd, InviteCmd,\
-                                    WhoisCmd, \
-                                    NamesReply, NamesEndReply, \
-                                    WhoReply, WhoEndReply, \
-                                    WhoisChannelsReply, WhoisIdleReply, \
-                                    WhoisUserReply, WhoisServerReply, \
-                                    WhoisEndReply
-from interaction.irc.networks.quakenet import WhoisAuthReply
 
-"""-----------------------------------------------------------------------------
-Constants
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
 KEY_ROLE       = 'usermgmt.role'
 KEY_AUTH       = 'usermgmt.auth'
 KEY_IDLETIME   = 'usermgmt.idletime'
 KEY_SIGNONTIME = 'usermgmt.signontime'
 
-TOKEN_OP    = '@'
-TOKEN_VOICE = '+'
+TOKEN_OP    = '\x64'
+TOKEN_VOICE = '\x43'
 
-"""-----------------------------------------------------------------------------
-Exceptions
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Exceptions
+#-------------------------------------------------------------------------------
 class UserError(ModuleError): pass
 class UserInvalid(UserError): pass
 class UserExists(UserError): pass
 class UserNotAuthenticated(UserError): pass
 class UserNotAuthorized(UserError): pass
 
-"""-----------------------------------------------------------------------------
-Business Logic
------------------------------------------------------------------------------"""
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
 class Usermgmt(InteractiveModule):
     """
     Maintain a list of channels the bot has joined and users known to the bot.
     """
     
-    """-------------------------------------------------------------------------
-    Implementation of Module methods
-    -------------------------------------------------------------------------"""
-    def get_receive_listeners(self):
-        """
-        Return a mapping between commands and callback functions.
-        
-        TODO: add who/whois handling
-        """
-        
-        listeners = InteractiveModule.get_receive_listeners(self)
-
-        listeners.update({
-            JoinCmd: self.process_join,
-            PartCmd: self.process_part,
-            KickCmd: self.process_kick,
-            QuitCmd: self.process_quit,
-            NickCmd: self.process_nick,
-            InviteCmd: self.process_invite,
-            
-            TopicCmd: self.process_topic,
-            
-            NamesReply: self.process_userinfo,
-            NamesEndReply: self.process_userinfo,
-            WhoReply: self.process_userinfo,
-            WhoEndReply: self.process_userinfo,
-            WhoisUserReply: self.process_userinfo,
-            WhoisChannelsReply: self.process_userinfo,
-            WhoisServerReply: self.process_userinfo,
-            WhoisIdleReply: self.process_userinfo,
-            WhoisAuthReply: self.process_userinfo,
-            WhoisEndReply: self.process_userinfo
-        })
-        
-        return listeners
-        
-    """-------------------------------------------------------------------------
-    Implementation of InteractiveModule methods 
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # Module implementation
+    #---------------------------------------------------------------------------
     def initialize(self):
         """
         Initialize the module.
@@ -124,33 +80,74 @@ class Usermgmt(InteractiveModule):
         self.chanlist = ChannelList(self.client)
         self.userlist = UserList(self.client)
 
+    def get_receive_listeners(self):
+        """
+        Return a mapping between commands and callback functions.
+        """
+        
+        listeners = InteractiveModule.get_receive_listeners(self)
+
+        listeners.update({
+            'Join': self.process_join,
+            'Part': self.process_part,
+            'Kick': self.process_kick,
+            'Quit': self.process_quit,
+            'Nick': self.process_nick,
+            'Invite': self.process_invite,
+            
+            'Topic': self.process_topic,
+            
+            'NamesReply': self.process_names,
+            'WhoReply': self.process_who,
+            'WhoisUserReply': self.process_whois_user,
+            'WhoisIdleReply': self.process_whois_idle,
+            'WhoisAuthReply': self.process_whois_auth,
+        })
+        
+        return listeners
+        
+    #---------------------------------------------------------------------------
+    # InteractiveModule implementation
+    #---------------------------------------------------------------------------
     def module_identifier(self):
         return 'Benutzerverwaltung'
     
     def init_commands(self):
         return [
-            InteractiveModuleCommand(keyword='listuser', callback=self.list_user, location=Location.QUERY, role=Role.ADMIN),
-            InteractiveModuleCommand(keyword='adduser', callback=self.insert_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$'),
-            InteractiveModuleCommand(keyword='chguser', callback=self.change_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$'),
-            InteractiveModuleCommand(keyword='deluser', callback=self.delete_user, location=Location.QUERY, role=Role.ADMIN, pattern=r'^$')
+            InteractiveModuleCommand(
+                keyword='listuser',
+                callback=self.list_user,
+                location=Location.QUERY,
+                role=Role.ADMIN),
+            InteractiveModuleCommand(
+                keyword='adduser',
+                callback=self.insert_user,
+                location=Location.QUERY,
+                role=Role.ADMIN,
+                pattern=r'^$',
+                syntaxhint='???'
+            ),
+            InteractiveModuleCommand(
+                keyword='chguser',
+                callback=self.change_user,
+                location=Location.QUERY,
+                role=Role.ADMIN, 
+                pattern=r'^$',
+                syntaxhint='???'
+            ),
+            InteractiveModuleCommand(
+                keyword='deluser',
+                callback=self.delete_user,
+                location=Location.QUERY,
+                role=Role.ADMIN,
+                pattern=r'^$',
+                syntaxhint='???'
+            )
         ]
 
-    def invalid_parameters(self, event, location, command, parameter):
-        """
-        Notify the user about invalid command syntax.
-        """
-        
-        messages = {}
-        messages['listuser'] = 'usage: .listuser'
-        messages['adduser']  = 'usage: .adduser ???'
-        messages['chguser']  = 'usage: .chguser ???'
-        messages['deluser']  = 'usage: .deluser ???'
-        
-        return messages[command]
-    
-    """-------------------------------------------------------------------------
-    Protocol handling
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # protocol handling
+    #---------------------------------------------------------------------------
     def process_join(self, event):
         """
         Process all incoming JOIN events.
@@ -184,7 +181,9 @@ class Usermgmt(InteractiveModule):
         user.add_channel(channel, None)
         
         if event.source.nickname != self.me.source.nickname:
-            self.client.send_command(WhoisCmd, event.source.nickname)
+            whois = self.client.get_command('Whois').get_sender()
+            whois.user = event.source.nickname
+            whois.send()
             
     
     def process_part(self, event):
@@ -245,8 +244,11 @@ class Usermgmt(InteractiveModule):
                 if len(user.get_channels()) == 0:
                     self.userlist.remove(user.source.nickname)
             
-            sleep(1)
-            self.client.send_command(JoinCmd, [channel_name])
+            time.sleep(1)
+            
+            join = self.client.get_command('Join').get_sender()
+            join.channels = [channel_name]
+            join.send()
         
         else:
             self.client.logger.info('User {0} was kicked from {1} by {2}'.format(victim, channel_name, event.source.nickname))
@@ -316,83 +318,95 @@ class Usermgmt(InteractiveModule):
         channel = self.chanlist.get(channel_name)
         channel.topic = topic
     
-    def process_userinfo(self, event):
+    def process_names(self, event):
         """
-        Process all events regarding user information.
+        Process NAMES events.
         
-        This includes the following events:
-        - NAMES
-        - WHO
-        - WHOIS
-        
-        TODO: NAMES - handle user modes
+        TODO: handle user modes
         """
         
-        if event.command == NamesReply.token():
-            channel_name, nicklist = event.parameter[2:4]
-                    
-            channel = self.chanlist.get(channel_name)
-            
-            for nickname in nicklist.split(SPACE):
-                if nickname.startswith(TOKEN_OP):
-                    nickname = nickname[1:]
-                    mode = Channel.USERMODE_OP
+        channel_name, nicklist = event.parameter[2:4]
+                
+        channel = self.chanlist.get(channel_name)
+        
+        for nickname in nicklist.split(SPACE):
+            if nickname.startswith(TOKEN_OP):
+                nickname = nickname[1:]
+                mode = Channel.USERMODE_OP
 
-                if nickname.startswith(TOKEN_VOICE): 
-                    nickname = nickname[1:]
-                    mode = Channel.USERMODE_VOICE
-                
-                else:
-                    mode = None
-                
-                user = self.userlist.request(ClientSource(nickname))
-                user.set_data(KEY_ROLE, Role.USER)
-                user.add_channel(channel, mode)
-                
-                if nickname != self.me.source.nickname:
-                    self.client.send_command(WhoisCmd, nickname)
+            if nickname.startswith(TOKEN_VOICE): 
+                nickname = nickname[1:]
+                mode = Channel.USERMODE_VOICE
+            
+            else:
+                mode = None
+            
+            user = self.userlist.request(ClientSource(nickname=nickname))
+            user.set_data(KEY_ROLE, Role.USER)
+            user.add_channel(channel, mode)
+            
+            if nickname != self.me.source.nickname:
+                whois = self.client.get_command('Whois').get_sender()
+                whois.user = nickname
+                whois.send()
         
-        elif event.command == WhoReply.token():
-            print event.parameter
+    def process_who(self, event):
+        """
+        Process WHO events.
+        """
         
-        elif event.command == WhoisUserReply.token():
-            nickname = event.parameter[1]
-            ident = event.parameter[2]
-            host = event.parameter[3]
-            realname = event.parameter[5]
-            
-            user = self.userlist.get(nickname)
-            user.source.ident = ident
-            user.source.host = host
-            user.source.realname = realname
-            
-            self.client.logger.info('User information: {0} has Ident {1}, Hostname {2}, Realname {3}'.format(nickname, ident, host, realname))
+        print event.parameter
+    
+    def process_whois_user(self, event):
+        """
+        Process the user part of a WHOIS event.
+        """
         
-        elif event.command == WhoisIdleReply.token():
-            nickname = event.parameter[1]
-            idle_time = event.parameter[2]
-            signon_time = event.parameter[3]
-            
-            user = self.userlist.get(nickname)
-            user.set_data(KEY_IDLETIME, idle_time)
-            user.set_data(KEY_SIGNONTIME, signon_time)
-            
-            self.client.logger.info('User information: {0} has idled {1} seconds'.format(nickname, idle_time))
-            self.client.logger.info('User information: {0} has signed on at {1}'.format(nickname, signon_time))
+        nickname = event.parameter[1]
+        ident = event.parameter[2]
+        host = event.parameter[3]
+        realname = event.parameter[5]
         
-        elif event.command == WhoisAuthReply.token():
-            nickname = event.parameter[1]
-            auth = event.parameter[2]
-            
-            user = self.userlist.get(nickname)
-            user.set_data(KEY_ROLE, Role.AUTHED)
-            user.set_data(KEY_AUTH, auth)
-            
-            self.client.logger.info('User information: {0} is authed as {1}'.format(nickname, auth))
-
-    """-------------------------------------------------------------------------
-    Authorization
-    -------------------------------------------------------------------------"""
+        user = self.userlist.get(nickname)
+        user.source.ident = ident
+        user.source.host = host
+        user.source.realname = realname
+        
+        self.client.logger.info('User information: {0} has Ident {1}, Hostname {2}, Realname {3}'.format(nickname, ident, host, realname))
+    
+    def process_whois_idle(self, event):
+        """
+        Process the idle part of a WHOIS event.
+        """
+        
+        nickname = event.parameter[1]
+        idle_time = event.parameter[2]
+        signon_time = event.parameter[3]
+        
+        user = self.userlist.get(nickname)
+        user.set_data(KEY_IDLETIME, idle_time)
+        user.set_data(KEY_SIGNONTIME, signon_time)
+        
+        self.client.logger.info('User information: {0} has idled {1} seconds'.format(nickname, idle_time))
+        self.client.logger.info('User information: {0} has signed on at {1}'.format(nickname, signon_time))
+    
+    def process_whois_auth(self, event):
+        """
+        Process the auth part of a WHOIS event.
+        """
+        
+        nickname = event.parameter[1]
+        auth = event.parameter[2]
+        
+        user = self.userlist.get(nickname)
+        user.set_data(KEY_ROLE, Role.AUTHED)
+        user.set_data(KEY_AUTH, auth)
+        
+        self.client.logger.info('User information: {0} is authed as {1}'.format(nickname, auth))
+        
+    #---------------------------------------------------------------------------
+    # User management
+    #---------------------------------------------------------------------------
     def list_user(self, event, location, command, parameter):
         return "Adminliste: (not implemented)"
     
@@ -413,12 +427,8 @@ class Usermgmt(InteractiveModule):
             if self.isPrivateUser(user):
                 raise UserExists
         
-            password_hash = md5(password).hexdigest()
-            
-            self.persistence.insertUser(user, password_hash)
-        
-        except DatabaseError:
-            return "Fehler beim der Accounterstellung!"
+            # TODO impl
+            #password_hash = hashlib.sha1(password).hexdigest()
         
         except UserNotAuthenticated:
             return "Du bist nicht geauthed!"
@@ -435,9 +445,9 @@ class Usermgmt(InteractiveModule):
         return "User '???' als Admin entfernt."
         return "User '???' befindet sich nicht in der Liste."
 
-    """-------------------------------------------------------------------------
-    Public API
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # public API
+    #---------------------------------------------------------------------------
     def get_role(self, nickname):
         user = self.userlist.get(nickname=nickname)
         
@@ -446,4 +456,219 @@ class Usermgmt(InteractiveModule):
         
         except KeyError:
             return Role.USER
+
+
+class ChannelList(object):
+    """
+    Maintain a list of channels the bot has joined.
+     
+    The information this module contains include 
+    - the channel name
+    - the channel topic
+    - the channel modes
+    - a list of ban masks
+    - a list of invite masks
+    - a list of users currently on each channel
+    """
+    
+    def __init__(self, client):
+        """
+        Initialize the channel list.
+        """
         
+        self.client = client
+        self.channels = {}
+    
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+        
+        return 'ChannelList(Channels={0})'.format('|'.join([str(channel) for channel in self.channels.values()]))
+    
+    def add(self, channel):
+        """
+        Add a channel object to the channel list.
+        
+        If the channel name exists, it will be overwritten.
+        
+        @param channel: A channel object.
+        """
+        
+        self.channels[channel.name] = channel
+    
+    def request(self, name):
+        """
+        Request a channel from the channel list by name.
+        
+        If the channel does not exist, it will be created and returned.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        """
+        
+        try:
+            return self.get(name)
+        
+        except KeyError:
+            channel = Channel(name=name)
+            
+            self.add(channel)
+            
+            return channel
+    
+    def get(self, name):
+        """
+        Return a channel object from the channel list.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        
+        @raise KeyError If the channel does not exist.
+        """
+        
+        return self.channels[name]
+    
+    def get_all(self):
+        """
+        Return the current user list of the channel.
+        
+        @return The user list.
+        """
+        
+        return self.channels
+    
+    def remove(self, name):
+        """
+        Remove a channel object from the channel list.
+        
+        This will remove the channel from every user's channel list
+        who had joined chat channel.
+        
+        @param name: The channel name.
+        
+        @raise KeyError If the channel does not exist.
+        """
+        
+        channel = self.channels[name]
+        
+        for user_tuple in channel.get_users().values():
+            user = user_tuple[0]
+            user.remove_channel(channel)
+            
+        channel = None
+        
+        del self.channels[name]
+
+
+class UserList(object):
+    """
+    Provide a List with User entities that are known to the bot. Each
+    user on a given IRC network only exists once in this list, even if
+    the user shares multiple channels with the bot.
+    
+    Every channel is also maintaining a user list, but only uses
+    references to Userlist objects.
+    """
+    
+    def __init__(self, client):
+        """
+        Create an empty user list.
+        """
+        
+        self.client = client
+        self.users = {}
+        
+    def __str__(self):
+        """
+        Return a string representation for debugging purposes.
+        """
+
+        return 'Userlist(Users={0})'.format('|'.join([str(user) for user in self.users.values()]))
+    
+    def add(self, user):
+        """
+        Add a new User object to the list.
+        
+        @param user: The user object.
+        """
+        
+        self.users[user.source.nickname] = user
+        
+    def request(self, source, realname=''):
+        """
+        Request a user from the user list by source.
+        
+        If the user object does not exist, it will be created and returned.
+        
+        @param name: The channel name.
+        
+        @return A channel object.
+        """
+        
+        try:
+            return self.get(source)
+        
+        except KeyError:
+            user = User(source=source, realname=realname)
+            
+            self.add(user)
+            
+            return user
+
+    def get(self, nickname):
+        """
+        Return a user object by its nickname.
+        
+        @param source: The source object of the user.
+        
+        @return The user object, if existent.
+        
+        @raise KeyError if no such user was found.
+        """
+        
+        return self.users[nickname]
+    
+    def get_all(self):
+        """
+        Return the current list of users known to the bot.
+        
+        @return The user list.
+        """
+        
+        return self.users
+    
+    def rename(self, current_nickname, new_nickname):
+        """
+        Changes the nickname of a user.
+        
+        @param current_nickname: The current nickname of the user
+        @param new_nickname: The new nickname of the user
+        """
+        
+        self.users[new_nickname] = self.users[current_nickname]
+        self.users[new_nickname].rename(new_nickname)
+        del self.users[current_nickname]
+    
+    def remove(self, nickname):
+        """
+        Remove a user object by its nickname from the user list.
+        
+        Any references to channels the user had joined are also
+        removed.
+        
+        @param source: The source object of the user.
+        
+        @raise KeyError if no such user was found.
+        """
+        
+        user = self.get(nickname)
+        
+        for channel in user.get_channels():
+            user.remove_channel(channel)
+            
+        user = None
+            
+        del self.users[nickname]

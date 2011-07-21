@@ -46,7 +46,7 @@ class TestConfig(unittest.TestCase):
         self.assertTrue(len(self.config._keys) > 0)
         
     def test_01_name(self):
-        self.assertEquals(self.config.name(), 'test.core.config')
+        self.assertEquals(self.config.identifier, 'test.core.config')
         
     def test_02_validation(self):
         invalid = {'test5': 'foobar', 'test2' : 42}
@@ -84,7 +84,7 @@ class TestConfig(unittest.TestCase):
         self.config.save()
         self.config.set('test10', 'foobar84')
         
-        filename = '{0}/{1}'.format(DIR_CONFIG, self.config.name())
+        filename = '{0}/{1}'.format(DIR_CONFIG, self.config.identifier)
         
         self.assertTrue(filename in self.bot.get_persistence().storage)
         self.assertEquals(self.bot.get_persistence().storage[filename]['test1'], 10)

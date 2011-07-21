@@ -29,26 +29,42 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = '$$'
+__version__ = '$Rev$'
 
 import random
 
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply
 
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
 class Roll(InteractiveModule):
     """
     This module provides a virtual dice.
     """
     
+    #---------------------------------------------------------------------------
+    # InteractiveModule implementation
+    #---------------------------------------------------------------------------
     def module_identifier(self):
         return 'Rollapparillo'
     
     def init_commands(self):
         return [
-            InteractiveModuleCommand(keyword='roll', callback=self.roll, pattern=r'^([\d]+)(?:-([\d]+))?$', syntaxhint='zahl[-zahl]')
+            InteractiveModuleCommand(
+                keyword='roll',
+                callback=self.roll,
+                pattern=r'^([\d]+)(?:-([\d]+))?$',
+                syntaxhint='zahl[-zahl]'
+            )
         ]
     
+    #---------------------------------------------------------------------------
+    # module commands
+    #---------------------------------------------------------------------------
     def roll(self, event, location, command, parameter):
+        reply = InteractiveModuleReply()
+        
         if parameter[1]:
             min = int(parameter[0])
             max = int(parameter[1])
@@ -61,11 +77,11 @@ class Roll(InteractiveModule):
         
         result = random.randint(min, max)
         
-        reply = '{0} has rolled: {1} ({2}-{3})'.format(
+        reply.add_line('{0} has rolled: {1} ({2}-{3})'.format(
             event.source.nickname,
             result,
             min,
             max
-        )
+        ))
         
         return reply

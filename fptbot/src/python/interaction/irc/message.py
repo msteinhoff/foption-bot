@@ -30,9 +30,9 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from string import split
+import string
 
-from interaction.irc.source import Source, ServerSource, ClientSource
+from interaction.irc.source import ServerSource, ClientSource
 
 SPACE      = '\x20'
 COLON      = '\x3A'
@@ -75,43 +75,41 @@ class Message(object):
         """
         Parse the class' message attribute and return a new Event instance.
         
+        TODO: cleaner implementation using regex
+        
         @return An Event instance.
         """
         
         result = self.message
         
-        """---------------------------------------------------------------------
-        Extract the source if available
-        
-        TODO: cleaner implementation using regex
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # Extract the source if available
+        # ----------------------------------------------------------------------
         if result.startswith(COLON):
-            source, result = split(result[1:], SPACE, 1)
+            source, result = string.split(result[1:], SPACE, 1)
             
-            """when source contains a EXMARK we assume that source is not a
-            servername, because EXMARK are not allowed in ip addresses or
-            dns names."""
+            # when source contains a EXMARK we assume that source is not a
+            # servername, because EXMARK are not allowed in ip addresses or
+            # dns names.
             
             if EXMARK in source:
-                nick, ident_host = split(source, EXMARK)
-                ident, host = split(ident_host, AT)
+                nick, ident_host = string.split(source, EXMARK)
+                ident, host = string.split(ident_host, AT)
                 
-                source = ClientSource(nick, ident, host)
+                source = ClientSource(nickname=nick, ident=ident, host=host)
             else:
-                source = ServerSource(source)
+                source = ServerSource(servername=source)
             
         else:
             source = None
     
-        """---------------------------------------------------------------------
-        Separate command and parameters
-        
-        TODO: cleaner implementation using regex
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # Separate command and parameters
+        #-----------------------------------------------------------------------
         try:
             # First case: There is a parameter with spaces after SPACECOLON
-            msg_without_space, msg_with_space = split(result, SPACECOLON, 1)
-            msg_parts = split(msg_without_space, SPACE)
+            msg_without_space, msg_with_space = string.split(result, SPACECOLON, 1)
+            msg_parts = string.split(msg_without_space, SPACE)
             
             command = msg_parts[0]
             parameter = msg_parts[1:]
@@ -120,7 +118,7 @@ class Message(object):
         except ValueError:
             try:
                 # Second case: There are multiple parameters without space
-                msg = split(result, SPACE)
+                msg = string.split(result, SPACE)
                 command = msg[0]
                 parameter = msg[1:]
                 
@@ -130,27 +128,25 @@ class Message(object):
                 parameter = None
         
         return Event(source, command, parameter)
-    
+
+
 class Event(object):
     """
     An IRC message event.
     """
     
-    def __init__(self, source, command, parameter):
+    def __init__(self, source=None, command=None, parameter=None):
         """
         Create a new instance.
         
-        @param source: a Source instance or None  
-        @param command: the IRC command or reply
+        @param source: a Source instance or None
+        @param command: the IRC command/reply
         @param parameter: a list with all parameters or None
         """
         
-        if source != None and not isinstance(source, Source):
-            raise ValueError
-        
-        self.source = source
-        self.command = command
-        self.parameter = parameter
+        self.source = source or ''
+        self.command = command or ''
+        self.parameter = parameter or []
 
     def __str__(self):
         """
@@ -168,23 +164,23 @@ class Event(object):
         @raise ValueError if any of the first n-1 parameters contain spaces.
         """
         
-        """---------------------------------------------------------------------
-        Handle the source if existent
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # Handle the source if existent
+        #-----------------------------------------------------------------------
         if self.source == None:
             prefix = ''
             
         else:
             prefix = '{0}{1}{2}'.format(COLON, self.source, SPACE)
             
-        """---------------------------------------------------------------------
-        Handle the command
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # Handle the command
+        #-----------------------------------------------------------------------
         command = self.command
         
-        """---------------------------------------------------------------------
-        Handle parameters
-        ---------------------------------------------------------------------"""
+        #-----------------------------------------------------------------------
+        # Handle parameters
+        #-----------------------------------------------------------------------
         if self.parameter == None:
             paramlist = ''
             
@@ -216,53 +212,3 @@ class Event(object):
         Create a new Message instance.
         """
         return Message(self.compose())
-
-class Location(object):
-    """
-    Represent a location determining where a ModuleCommand can be executed.
-    
-    TODO: need real object here or maybe move to own python module?
-    """
-    
-    CHANNEL = 1
-    QUERY   = 2
-    BOTH    = CHANNEL | QUERY
-
-    def __init__(self):
-        """
-        This class may currently not be instantiated. 
-        """
-        
-        raise NotImplementedError
-
-    @staticmethod
-    def get(target):
-        """
-        Derive the location from the target.
-        
-        @param target: The target to check.
-        
-        @return CHANNEL If the target starts with a channel token,
-        QUERY otherwise.
-        """
-        
-        if target.startswith(CHANNEL_TOKEN):
-            location = Location.CHANNEL
-        else:
-            location = Location.QUERY
-        
-        return location
-
-    @staticmethod
-    def valid(required, location):
-        """
-        Check whether the location matches the requirements.
-        
-        @param required: The locations that are valid.
-        @param location: The actual location.
-        
-        @return True if the actual location is within the required location,
-        False otherwise.
-        """
-        
-        return (required | location == required)

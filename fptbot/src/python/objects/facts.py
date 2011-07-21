@@ -24,37 +24,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since Apr 18, 2011
-@author Mario Steinhoff
+@since May 6, 2011
+@author msteinhoff
 """
 
 __version__ = '$Rev$'
 
-from core.bot import BotError
+__all__ = [
+    'Fact'
+]
 
-# ------------------------------------------------------------------------------
-# Exceptions
-# ------------------------------------------------------------------------------
-class ComponentError(BotError): pass
-
-# ------------------------------------------------------------------------------
-# Business Logic
-# ------------------------------------------------------------------------------
-class Component(object):
-    """
-    Component interface.
-    """
-    
-    def start(self):
-        """
-        Start the component and any background services.
-        """
-        
-        pass
-    
-    def stop(self):
-        """
-        Stop the component and any background services.
-        """
-        
-        pass
+class Fact(object):
+    def __init__(self, id=None, date=None, text=None):
+        self.id = id
+        self.date = date
+        self.text = text

@@ -30,25 +30,26 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from logging         import basicConfig, getLogger, DEBUG
-from multiprocessing import Process
+import logging
+import multiprocessing
 
-from core.constants          import DB_BOT
-from core.config             import Config
-from core.persistence        import Persistence
+from core.timer import timer_map
+from core.config import Config
+from core.persistence import Persistence
 from interaction.interaction import Interaction
 
-"""-----------------------------------------------------------------------------
-Exceptions
------------------------------------------------------------------------------"""
+# ------------------------------------------------------------------------------
+# Exceptions
+# ------------------------------------------------------------------------------
 class BotError(Exception): pass
 class ConfigRegisteredError(BotError): pass
 class InteractionRegisteredError(BotError): pass
 class ComponentRegisteredError(BotError): pass
+class TimerRegisteredError(BotError): pass
 
-"""-----------------------------------------------------------------------------
-Business Logic
------------------------------------------------------------------------------"""
+# ------------------------------------------------------------------------------
+# Business Logic
+# ------------------------------------------------------------------------------
 class Bot(object):
     """
     Provide general functionality and start all subsystems.
@@ -59,17 +60,27 @@ class Bot(object):
         Initialize the bot.
         """
         
-        basicConfig(level=DEBUG)
+        logging.basicConfig(level=logging.DEBUG)
         
-        self._persistence = Persistence(DB_BOT)
+        self.logger = self.get_logger()
+        
         self._config = {}
-        self._interaction = {}
-        self._components = {}
-        self._processes = {}
-        
         self.register_config(BotConfig)
+        
+        self._persistence = Persistence(self.get_config('core.bot').get('database-file'))
+        self.register_persistence()
+        
+        self._components = {}
+        self.register_component('principal', 'components.principal.PrincipalComponent')
         self.register_component('calendar', 'components.calendar.CalendarComponent')
+        self.register_component('facts', 'components.facts.FactsComponent')
+        
+        self._interaction = {}
         self.register_interaction('irc', 'interaction.irc.client.Client')
+        
+        self._timer = {}
+        
+        self._processes = {}
     
     def get_object( self, name ):
         """
@@ -94,9 +105,9 @@ class Bot(object):
         
         return obj
     
-    """-------------------------------------------------------------------------
-    Logging
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # logging
+    #---------------------------------------------------------------------------
     def get_logger(self, identifier=None):
         """
         Return a logger instance.
@@ -108,11 +119,11 @@ class Bot(object):
         if identifier == None:
             identifier = 'core.bot'
             
-        return getLogger(identifier)
+        return logging.getLogger(identifier)
     
-    """-------------------------------------------------------------------------
-    Persistence
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # persistence
+    #---------------------------------------------------------------------------
     def get_persistence(self):
         """
         Return the persistence instance.
@@ -120,18 +131,18 @@ class Bot(object):
         
         return self._persistence
     
-    """-------------------------------------------------------------------------
-    Configuration
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # configuration
+    #---------------------------------------------------------------------------
     def register_config(self, clazz):
         """
         @param clazz: 
         """
         
-        if clazz.name in self._config:
+        if clazz.identifier in self._config:
             raise ConfigRegisteredError
         
-        self._config[clazz.identifier] = clazz(self)
+        self._config[clazz.identifier] = clazz()
         
     def get_config(self, identifier):
         """
@@ -146,9 +157,9 @@ class Bot(object):
         
         return self._config
     
-    """-------------------------------------------------------------------------
-    Interaction
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # interaction
+    #---------------------------------------------------------------------------
     def register_interaction(self, identifier, classname):
         """
         @param identifier: 
@@ -162,9 +173,9 @@ class Bot(object):
         
         self._interaction[identifier] = clazz(self)
         
-    """-------------------------------------------------------------------------
-    Components
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # components
+    #---------------------------------------------------------------------------
     def register_component(self, identifier, classname):
         """
         @param identifier: 
@@ -185,9 +196,25 @@ class Bot(object):
         
         return self._components[identifier]
     
-    """-------------------------------------------------------------------------
-    System
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # timer
+    #---------------------------------------------------------------------------
+    def register_timer(self, identifier, type, interval, callback):
+        if identifier in self._timer:
+            raise TimerRegisteredError(identifier)
+        
+        self._timer[identifier] = timer_map[type](interval, callback)
+        
+    def get_timer(self, identifier):
+        """
+        @param identifier: 
+        """
+        
+        return self._timer[identifier]
+    
+    #---------------------------------------------------------------------------
+    # system
+    #---------------------------------------------------------------------------
     def run(self):
         """
         Start the system.
@@ -196,22 +223,47 @@ class Bot(object):
         and call their start() method.
         """
         
-        self.get_logger().info('starting the system')
+        for name, component in self._components.items():
+            self.logger.info('starting component %s', name)
+            component.start()
         
         for name, object in self._interaction.items():
-            #self._processes[name] = Process(target=Interaction.startInteraction, args=(self, object))
+            #self._processes[name] = multiprocessing.Process(target=Interaction.startInteraction, args=(self, object))
             #self._processes[name].start()
             
+            self.logger.info('starting process %s', name)
             self._processes[name] = object
             self._processes[name].start()
         
-        self.get_logger().info('startup completed')
+        # temporary solution because the system currently uses only one thread. 
+        self.halt()
+        
+    def halt(self):
+        """
+        Shutdown the system.
+        """
+        
+        for name, object in self._processes.items():
+            self.logger.info('stopping process %s', name)
+            object.stop()
+        
+        for name, component in self._components.items():
+            self.logger.info('stopping component %s', name)
+            component.stop()
+
 
 class BotConfig(Config):
     identifier = 'core.bot'
         
     def valid_keys(self):
-        return []
+        return [
+            'configuration-directory',
+            'logging-directory',
+            'database-file'
+        ]
     
     def default_values(self):
-        return {}
+        return {
+            'logging-directory'      : '',
+            'database-file'          : ''
+        }

@@ -30,22 +30,28 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from traceback import print_exc
-from socket    import AF_INET, SOCK_STREAM
-from asyncore  import loop
-from asynchat  import async_chat
+import socket
+import asyncore
+import asynchat
+import traceback
 
-from core.config             import Config
+from core.config import Config
+from objects.irc import User
 from interaction.interaction import Interaction
+from interaction.irc import commands
+from interaction.irc.source import ClientSource
 from interaction.irc.message import Message
-from interaction.irc.source  import ClientSource
-from interaction.irc.command import *
-from interaction.irc.channel import User
-from interaction.irc.networks.quakenet import WhoisAuthReply
+from interaction.irc.networks import quakenet
 
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
 CRLF = '\x0D\x0A'
 
-class Client(Interaction, async_chat):
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
+class Client(Interaction, asynchat.async_chat):
     """
     Provide a RFC 2812 compilant IRC client implementation using asyncore.
     """
@@ -58,11 +64,13 @@ class Client(Interaction, async_chat):
         """
         
         Interaction.__init__(self, bot)
-        async_chat.__init__(self)
+        asynchat.async_chat.__init__(self)
         
         self.set_terminator(CRLF)
         
         self._commands = {}
+        self._recvname = {}
+        self._recvtoken = {}
         self._modules = {}
         
         self.bot.register_config(ClientConfig)
@@ -71,46 +79,27 @@ class Client(Interaction, async_chat):
         self.logger = self.bot.get_logger(ClientConfig.identifier)
         
         self.me = User(
-            ClientSource(
-                self.config.get('nickname'),
-                self.config.get('ident')
-            ),
-            self.config.get('realname')
+            source=ClientSource(nickname=self.config.get('nickname'), ident=self.config.get('ident')),
+            realname=self.config.get('realname')
         )
         
         self.register_commands()
         self.load_modules()
 
-    """-------------------------------------------------------------------------
-    Protocol commands
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # protocol commands
+    #---------------------------------------------------------------------------
     def register_commands(self):
         """
         Register default command handlers that implement protocol
         functionality.
         """
         
-        commands = [
-            NickCmd, UserCmd, ModeCmd, QuitCmd,
-            JoinCmd, PartCmd, TopicCmd, NamesCmd, InviteCmd, KickCmd,
-            PrivmsgCmd, NoticeCmd,
-            MotdCmd, WhoCmd, WhoisCmd,
-            PingCmd, PongCmd,
-            WelcomeReply, YourHostReply, CreatedReply, MyInfoReply, BounceReply,
-            MotdStartReply, MotdReply, MotdEndReply,
-            AwayReply, UniqueOpIsReply, ChannelModeIsReply, InvitingReply,
-            TopicReply, NoTopicReply,
-            WhoisUserReply, WhoisServerReply, WhoisOperatorReply,
-            WhoisIdleReply, WhoisChannelsReply, WhoisAuthReply, WhoisEndReply,
-            WhoReply, WhoEndReply,
-            NamesReply, NamesEndReply,
-            BanListReply, BanListEndReply,
-            InviteListReply, InviteListEndReply,
-            ExceptListReply, ExceptListEndReply
-        ]
-        
-        for command in commands:
-            self.register_command(command)
+        for command in commands.list:
+            self.register_command(getattr(commands, command, None))
+            
+        for command in quakenet.list:
+            self.register_command(getattr(quakenet, command, None))
     
     def register_command(self, command):
         """
@@ -122,41 +111,46 @@ class Client(Interaction, async_chat):
         @param command: A pointer to the handler class.
         """
         
-        instance = command(self)
+        if command is None:
+            return
         
-        self._commands[instance.token()] = instance
-    
-    def get_command(self, command):
+        name = command.__name__
+        token = command.token
+        
+        self.logger.info('registering command %s (IRC command: %s)', name, token)
+        
+        instance = command(self)
+        receiver = instance.get_receiver()
+        
+        self._commands[name] = instance
+        self._recvname[name] = receiver
+        self._recvtoken[token] = receiver
+        
+    def get_command(self, name):
         """
         Get a command handler.
         
-        @param command: A pointer to the handler class.
+        @param name: The command name.
         """
         
-        return self._commands[command.token()]
+        return self._commands[name]
     
-    def unregister_command(self, command):
+    def unregister_command(self, name):
         """
         Remove a command handler.
         
-        @param command: A pointer to the handler class.
+        @param token: The command token.
         """
         
-        del self._commands[command.token()]
+        token = self._commands[name].token
+        
+        del self._commands[name]
+        del self._recvname[name]
+        del self._recvtoken[token]
             
-    def send_command(self, command, *parameters):
-        """
-        Send a command.
-        
-        @param command: A pointer to the handler class.
-        @param parameters: The command parameters.
-        """
-        
-        self._commands[command.token()].send(*parameters)
-    
-    """-------------------------------------------------------------------------
-    Client modules
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # client modules
+    #---------------------------------------------------------------------------
     def load_modules(self):
         """
         Load all configured modules.
@@ -183,17 +177,23 @@ class Client(Interaction, async_chat):
         @return The module object.
         """
         
+        self.logger.info('loading module %s', name)
+        
         classname  = 'interaction.irc.modules.{0}.{1}'.format(name, name.capitalize())
         
         clazz = self.bot.get_object(classname)
         
-        self._modules[name] = clazz(self)
+        instance = clazz(self)
         
-        for command, listener in self._modules[name].get_receive_listeners().items():
-            self.get_command(command).add_receive_listener(listener)
+        self._modules[name] = instance
+        
+        for command_name, listener in instance.get_receive_listeners().items():
+            self.logger.debug('%s: registering receive listener for %s', name, command_name)
+            self._recvname[command_name].add_listener(listener)
+        
+        self.logger.info('loading module %s done', name)
             
-        return self.get_module(name)
-            
+        return instance
         
     def get_module(self, name):
         """
@@ -206,9 +206,9 @@ class Client(Interaction, async_chat):
         
         return self._modules[name]
         
-    """-------------------------------------------------------------------------
-    Connection handling
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # connection handling
+    #---------------------------------------------------------------------------
     def start(self):
         """
         Connect to the IRC server.
@@ -218,32 +218,29 @@ class Client(Interaction, async_chat):
         asyncore event loop.
         """
         
-        self.logger.info('starting client');
+        self.logger.info('starting client')
         
         try:
-            self.logger.info('starting modules');
+            self.logger.info('starting modules')
             
             for module_name, module in self._modules.items():
-                self.logger.info('starting module %(name)s', {'name': module_name})
+                self.logger.info('starting module %s', module_name)
                 module.start()
                 
-            self.logger.info('starting modules done');
+            self.logger.info('starting modules done')
             
-            self.logger.info('connecting to %(address)s:%(port)d', {
-                'address' : self.config.get('address'),
-                'port'    : self.config.get('port')
-            })
+            self.logger.info('connecting to %s:%d', self.config.get('address'), self.config.get('port'))
 
-            self.create_socket(AF_INET, SOCK_STREAM)
+            self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
             self.connect((self.config.get('address'), self.config.get('port')))
             
             self._buffer = []
             
-            loop()
+            asyncore.loop()
             
         except:
-            """TODO: check which exceptions are caught here
-            """
+            #TODO: check which exceptions are caught here
+            #TODO  print errors
             self.logger.error('starting client failed')
 
     def stop(self):
@@ -254,15 +251,15 @@ class Client(Interaction, async_chat):
         queued messages were sent.
         """
         
-        self.logger.info('closing connection')
+        self.logger.info('stopping client')
         
         self.pre_disconnect()
         
         self.close_when_done()
         
-    """-------------------------------------------------------------------------
-    Connection trigger
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # connection trigger
+    #---------------------------------------------------------------------------
     def pre_connect(self):
         """
         This trigger is called after the socket is opened.
@@ -274,10 +271,17 @@ class Client(Interaction, async_chat):
         nickname in use are catched and handled by high-level IRC commands.
         """
         
-        self.logger.info('Registering connection, Nickname: {0}, Realname: {1}, Ident: {2}'.format(self.me.source.nickname, self.me.realname, self.me.source.ident))
+        self.logger.info('Registering connection, Nickname: %s, Realname: %s, Ident: %s', self.me.source.nickname, self.me.realname, self.me.source.ident)
         
-        self.send_command(NickCmd, self.me.source.nickname)
-        self.send_command(UserCmd, self.me.realname, self.me.source.ident)
+        nick = self.get_command('Nick').get_sender()
+        nick.nickname = self.me.source.nickname
+        
+        user = self.get_command('User').get_sender()
+        user.ident = self.me.source.ident
+        user.realname = self.me.realname
+        
+        nick.send()
+        user.send()
     
     def post_connect(self):
         """
@@ -285,17 +289,22 @@ class Client(Interaction, async_chat):
         received.
         """
         
-        self.logger.info('Connected to server.')
-        self.logger.info('Joining channels: {0}'.format(self.config.get('channels')))
+        channels = self.config.get('channels')
         
-        self.send_command(JoinCmd, self.config.get('channels'))
+        self.logger.info('Connected to server.')
+        self.logger.info('Joining channels: %s', ','.join(channels))
+        
+        join = self.get_command('Join').get_sender()
+        join.channels = channels
+        join.send()
+        
     
     def pre_disconnect(self):
         """
         This trigger is called before the connection will be closed.
         """
         
-        self.send_command(QuitCmd)
+        self.get_command('Quit').get_sender().send()
         
     def post_disconnect(self):
         """
@@ -304,9 +313,9 @@ class Client(Interaction, async_chat):
         
         pass
 
-    """-------------------------------------------------------------------------
-    Low-level communication
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # low-level communication
+    #---------------------------------------------------------------------------
     def receive_event(self, event):
         """
         Handle all incoming IRC events.
@@ -319,17 +328,18 @@ class Client(Interaction, async_chat):
         @param event: A event instance with the message data.
         """
         
-        self.logger.info('Received: <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))
+        self.logger.info('Received: <%s> %s: %s', event.source, event.command, event.parameter)
         
-        if event.command not in self._commands:
+        try:
+            receiver = self._recvtoken[event.command]
+        except KeyError:
             return
         
         try:
-            self._commands[event.command].receive(event)
+            receiver.receive(event)
         except:
-            print_exc()
-            
-        
+            traceback.print_exc()
+    
     def send_event(self, event):
         """
         Handle all outgoing IRC events.
@@ -343,13 +353,13 @@ class Client(Interaction, async_chat):
         
         message = event.create_message()
         
-        self.logger.info('Sent:     <{0}> {1}: {2}'.format(event.source, event.command, event.parameter))
+        self.logger.info('Sent:     <%s> %s: %s', event.source, event.command, event.parameter)
         
         self.push('{0}{1}'.format(message, CRLF))
         
-    """-------------------------------------------------------------------------
-    Implementation of asyncore methods 
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # asyncore implementation
+    #---------------------------------------------------------------------------
     def handle_connect(self):
         """
         Send IRC specific commands when connecting.
@@ -370,12 +380,12 @@ class Client(Interaction, async_chat):
         self.post_disconnect()
         
         for module_name, module in self._modules.items():
-            self.logger.info('stopping module %(name)s', {'name': module_name})
+            self.logger.info('stopping module %s', module_name)
             module.stop()
 
-    """-------------------------------------------------------------------------
-    Implementation of asynchat methods 
-    -------------------------------------------------------------------------"""
+    #---------------------------------------------------------------------------
+    # asynchat implementation
+    #---------------------------------------------------------------------------
     def collect_incoming_data(self, data):
         """
         Add any received data to the internal buffer.
@@ -421,7 +431,8 @@ class Client(Interaction, async_chat):
         message = Message(data)
         
         self.receive_event(message.create_event())
-    
+
+
 class ClientConfig(Config):
     identifier = 'interaction.irc'
         
@@ -448,3 +459,7 @@ class ClientConfig(Config):
             'modules'   : ['usermgmt'],
             'channels'  : ['#test']
         }
+
+
+
+

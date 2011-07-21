@@ -31,8 +31,7 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 __all__ = [
+    'interaction',
     'irc',
-    'http',
-    'syncml',
-    'caldav'
+    'http'
 ]

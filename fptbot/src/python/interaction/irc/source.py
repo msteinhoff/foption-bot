@@ -30,30 +30,19 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-class Source(object):
-    """
-    A IRC source entity, must be subclassed and implemented.
-    """
-    
-    def __init__(self):
-        raise NotImplementedError
-    
-    def __str__(self):
-        raise NotImplementedError
-
-class ServerSource(Source):
+class ServerSource(object):
     """
     A IRC server source entity.
     """
     
-    def __init__(self, servername):
+    def __init__(self, servername=None):
         """
         Create a new instance.
         
         @param servername: The servername of the entity
         """
         
-        self.servername = servername
+        self.servername = servername or ''
         
     def __str__(self):
         """
@@ -62,12 +51,13 @@ class ServerSource(Source):
          
         return '{0}'.format(self.servername)
 
-class ClientSource(Source):
+
+class ClientSource(object):
     """
     A IRC client source entity.
     """
     
-    def __init__(self, nickname, ident='', host=''):
+    def __init__(self, nickname=None, ident=None, host=None):
         """
         Create a new instance.
         
@@ -76,9 +66,9 @@ class ClientSource(Source):
         @param host: The hostname of the entity
         """
         
-        self.nickname = nickname
-        self.ident = ident
-        self.host = host
+        self.nickname = nickname or ''
+        self.ident = ident or ''
+        self.host = host or ''
         
     def __str__(self):
         """
@@ -86,4 +76,3 @@ class ClientSource(Source):
         """
          
         return '{0}!{1}@{2}'.format(self.nickname, self.ident, self.host)
-

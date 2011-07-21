@@ -24,37 +24,53 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since Apr 18, 2011
+@since Mar 12, 2011
 @author Mario Steinhoff
 """
 
 __version__ = '$Rev$'
 
-from core.bot import BotError
+from core.config import Config
+from core.component import Component, ComponentError
+from objects.principal import Principal, Role
 
 # ------------------------------------------------------------------------------
 # Exceptions
 # ------------------------------------------------------------------------------
-class ComponentError(BotError): pass
+class PrincipalComponentError(ComponentError): pass
 
 # ------------------------------------------------------------------------------
 # Business Logic
 # ------------------------------------------------------------------------------
-class Component(object):
-    """
-    Component interface.
-    """
-    
-    def start(self):
-        """
-        Start the component and any background services.
-        """
+class PrincipalComponent(Component):
+    def __init__(self, bot):
+        self.bot = bot
         
+        self.bot.register_config(PrincipalComponentConfig)
+        
+        self.config = self.bot.get_config('components.principal')
+        self.logger = self.bot.get_logger('components.principal')
+    
+    def find_principal_by_id(self, id):
         pass
     
-    def stop(self):
-        """
-        Stop the component and any background services.
-        """
-        
+    def insert_principal(self, principal):
         pass
+    
+    def update_principal(self, principal):
+        pass
+    
+    def delete_principal(self, id):
+        pass
+    
+# ------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------
+class PrincipalComponentConfig(Config):
+    identifier = 'components.principal'
+        
+    def valid_keys(self):
+        return []
+    
+    def default_values(self):
+        return {}

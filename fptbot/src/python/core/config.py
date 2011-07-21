@@ -30,10 +30,17 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from os import path
+try:
+    import cPickle as pickle
+except:
+    import pickle
+import os
 
 from core.constants import DIR_CONFIG
 
+# ------------------------------------------------------------------------------
+# BusinessLogic
+# ------------------------------------------------------------------------------
 class Config(object):
     """
     Provide abstract system-wide configuration handling.
@@ -41,16 +48,14 @@ class Config(object):
     TODO: Implement dict-style access for key/value-pairs.
     """
     
-    def __init__(self, bot):
+    def __init__(self):
         """
         Initialize the configuration.
         
         @param bot: The bot instance.
         """
         
-        self._bot = bot
-        
-        self.init()
+        self.init(self.default_values())
         self.load()
         
     def filter_valid_keys(self, dict):
@@ -74,17 +79,6 @@ class Config(object):
             result[key] = dict[key]
             
         return result
-    
-    def name(self):
-        """
-        Return the configuration's name.
-        """
-        
-        try:
-            return self.identifier
-        
-        except KeyError:
-            raise NotImplementedError
     
     def valid_keys(self):
         """
@@ -139,14 +133,14 @@ class Config(object):
         
         del self._keys[name]
         
-    def init(self):
+    def init(self, data={}):
         """
         Initialize configuration dictionary with default values.
         
         Overwrite all current values.
         """
         
-        self._keys = self.filter_valid_keys(self.default_values())
+        self._keys = self.filter_valid_keys(data)
 
     def load(self):
         """
@@ -156,27 +150,49 @@ class Config(object):
         exists but was not found in the persistence, it remains untouched. 
         """
         
-        filename = path.join(DIR_CONFIG, self.name())
+        filename = os.path.join(DIR_CONFIG, self.identifier)
         
-        try:
-            loaded = self.filter_valid_keys(self._bot.get_persistence().readobject(filename))
-        
-            self._keys.update(loaded)
-            
-        except IOError:
-            # could not load shit dude
-            pass
+        loaded = self.filter_valid_keys(self.readobject(filename))
+    
+        self._keys.update(loaded)
     
     def save(self):
         """
         Save the current configuration data to persistence.
         """
         
-        try:
-            filename = path.join(DIR_CONFIG, self.name())
-                
-            self._bot.get_persistence().writeobject(filename, self._keys)
+        filename = os.path.join(DIR_CONFIG, self.identifier)
             
-        except IOError:
-            # could not save shit dude
-            pass
+        self.writeobject(filename, self._keys)
+
+    def readobject(self, filename):
+        """
+        Restore a python object from a file.
+        
+        Read the serialized data of a python object's state and create
+        an object from it.
+        
+        @param filename: The source filename.
+        
+        @return the restored object 
+        """
+        
+        with open(filename, 'r') as f:
+            object = pickle.load(f)
+        
+        return object
+    
+    def writeobject(self, filename, object):
+        """
+        Persist a python object to a file.
+        
+        Serialize a python object's state and write the data to the
+        filesystem.
+        
+        @param filename: The destination filename.
+        @param object: The object to serialize.
+        """
+        
+        with open(filename, 'w') as f:
+            pickle.dump(object, f)
+    

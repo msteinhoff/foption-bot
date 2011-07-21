@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Apr 26, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
 __version__ = '$Rev$'
@@ -43,8 +43,9 @@ class Calendar(object):
         return ''
 
 class Event(object):
-    def __init__(self, id=None, etag=None, start=None, end=None, title=None, description=None, location=None):
+    def __init__(self, id=None, calendar=None, etag=None, start=None, end=None, title=None, description=None, location=None):
         self.id = id
+        self.calendar = calendar
         self.etag = etag
         self.start = start
         self.end = end

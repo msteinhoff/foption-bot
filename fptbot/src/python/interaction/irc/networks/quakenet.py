@@ -32,7 +32,11 @@ __version__ = '$Rev$'
 
 
 from interaction.irc.message import Event
-from interaction.irc.command import Command
+from interaction.irc.commands import Command
+
+list = [
+    'WhoisAuthReply'
+]
 
 class Auth(Command):
     """

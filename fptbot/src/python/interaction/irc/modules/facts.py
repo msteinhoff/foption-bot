@@ -31,127 +31,37 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-import urllib
-import re
 import random
 
-from threading import Timer
-from datetime import date, datetime
-from htmlentitydefs import name2codepoint
-
-from core.constants import TIME_HOUR
-from core.config import Config
 from interaction.irc.module import Module
-from interaction.irc.command import PrivmsgCmd
 
 class Facts(Module):
     """
     This module posts random facts in the channel.
     """
     
+    #---------------------------------------------------------------------------
+    # Module implementation
+    #---------------------------------------------------------------------------
     def initialize(self):
-        bot = self.client.bot; 
+        self.logger = self.client.bot.get_logger('interaction.irc.facts')
+        self.component = self.client.bot.get_component('facts')
         
-        bot.register_config(FactsConfig)
-        
-        self.config = bot.get_config(FactsConfig.identifier)
-        self.logger = bot.get_logger(FactsConfig.identifier)
-        self.persistence = FactsPersistence(bot.get_persistence())
-        
-    def start(self):
-        self.start_daily_timer(self.config.get('dbUpdateInterval'), self.update_data)
-           
-    def shutdown(self):
-        self.cancel_timer()
-    
     def get_receive_listeners(self):
-        return {PrivmsgCmd: self.post}
+        return {'Privmsg': self.random_post}
     
-    def post(self, event):
+    #---------------------------------------------------------------------------
+    # module commands
+    #---------------------------------------------------------------------------
+    def random_post(self, event):
         if random.randint(1,88) != 12:
             return
         
-        target, message = event.parameter[0:2]
+        fact = self.component.find_random_fact()
         
-        fact = self.persistence.get_random_fact()
+        reply = self.client.get_command('Privmsg').get_sender()
+        reply.target = event.parameter[0]
+        reply.text = 'ACTION ist kluK und weiss: "{0}"'.format(fact.text)
+        reply.send()
         
-        if not fact:
-            return
-        
-        text = 'ACTION ist kluK und weiss: "{0}"'.format(fact)
-        
-        for channel in self.client.get_module('usermgmt').chanlist.get_channels():
-            self.client.send_command(PrivmsgCmd, channel, text)
-    
-    def update_data(self):
-        currentLength = len(self.data)
-        if (len(self.WissenDB) > currentLength):
-            print ">> 'wissen'-database received " + str(len(self.WissenDB) - length) + " new facts!" 
-            list2txtfile(self.WissenDB, self.FilenameDB)
-            Text = self.WissenDB.pop(0).strip().replace("%nbsp;", " ")
-                
-                
-class FactsConfig(Config):
-    identifier = 'interaction.irc.module.facts'
-        
-    def valid_keys(self):
-        return [
-            'startDate',
-            'dbUpdateInterval',
-            'factUrl',
-        ]
-    
-    def default_values(self):
-        return {
-            'startDate'        : date(2010,4,8),
-            'dbUpdateInterval' : TIME_HOUR * 8,
-            'factUrl'          : ''
-        }
-
-class FactPersistence(object):
-    def __init__(self, persistence):
-        self.persistence = persistence
-    
-    def get_all_facts(self):
-        pass
-    
-    def get_random_fact(self):
-        pass
-    
-class FactInterface(object):
-    def get_data(self):
-        raise NotImplementedError
-
-class SchoelnastAtFactInterface(FactInterface):
-    
-    def __init__(self):
-        self.url = 'http://wissen.schoelnast.at/alles.shtml'
-        
-        self.regex = re.compile('<tr><td class="li">(\d{2}.\d{2}.\d{4})</td><td class="re2">(.+)<span class="blau">')
-
-    def get_data(self):
-        stream = urllib.urlopen(self.url)
-        
-        rawData = stream.readlines()
-
-        for line in rawData:
-            try:
-                result = self.regex.search(line).group(1,2)
-                
-                date = datetime.strptime(result[0], '%d.%m.%Y').date()
-                fact = result[1]
-                
-                if (Date > self.Config.WissenDate):
-                    self.Config.WissenDate = Date
-                    
-                if (Date > start_Date):
-                    a = self.unescape(r[1]).strip() + "\n"
-                    self.WissenDB.append(a)
-                else:
-                    break
-            
-            except:
-                pass
-
-    def unescape(self,s):
-        return re.sub('&(%s);' % '|'.join(name2codepoint), lambda m: unichr(name2codepoint[m.group(1)]), s)
+        self.logger.info('posted random fact number %s', fact.id)

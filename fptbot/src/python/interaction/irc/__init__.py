@@ -32,13 +32,9 @@ __version__ = '$Rev$'
 
 __all__ = [
     'client',
-    'channel',
-    'user',
-    'message',
     'command',
     'module',
     
     'networks',
-    'commands',
     'modules',
 ]

@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Jan 11, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
 from core.config            import Config

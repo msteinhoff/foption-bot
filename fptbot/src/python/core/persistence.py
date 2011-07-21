@@ -31,11 +31,15 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import sqlite3
-from cPickle import dump, load
 
-class DatabaseError(Exception):
-    pass
+# ------------------------------------------------------------------------------
+# Exceptions
+# ------------------------------------------------------------------------------
+class DatabaseError(Exception): pass
 
+# ------------------------------------------------------------------------------
+# Business Logic
+# ------------------------------------------------------------------------------
 class Persistence(object):
     """
     Provide persistence to all sub-systems.
@@ -69,69 +73,3 @@ class Persistence(object):
         """
         
         return self.connection.cursor()
-
-
-    def readobject(self, filename):
-        """
-        Restore a python object from a file.
-        
-        Read the serialized data of a python object's state and create
-        an object from it.
-        
-        @param filename: The source filename.
-        
-        @return the restored object 
-        """
-        
-        with open(filename, 'r') as f:
-            object = load(f)
-        
-        return object
-    
-    def writeobject(self, filename, object):
-        """
-        Persist a python object to a file.
-        
-        Serialize a python object's state and write the data to the
-        filesystem.
-        
-        @param filename: The destination filename.
-        @param object: The object to serialize.
-        """
-        
-        with open(filename, 'w') as f:
-            dump(object, f)
-    
-    def readlines(self, filename):
-        """
-        Restore a python sequence from a file.
-        
-        Read the string data and create a sequence from it.
-        
-        @param filename: The source filename.
-        
-        @return the sequence.
-        """
-        with open(filename, "r") as f:
-            list = f.readlines()
-        
-        return list
-
-    def writelines(self, filename, sequence):
-        """
-        Persist a python sequence to a file.
-        
-        Write a sequence of strings to the filesystem using writelines().
-        Each string object must have a line separator.
-        
-        @param filename: The destination filename.
-        @param sequence: The sequence to write.
-        
-        @see file.writelines()
-        """
-        with open(filename, 'w') as f:
-            f.writelines(sequence)
-        
-        f.close()
-        
-    

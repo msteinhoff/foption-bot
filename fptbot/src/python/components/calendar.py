@@ -30,22 +30,22 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from random import randint
-from datetime import date
+import random
+import datetime
 
 from core.config import Config
 from core.component import Component, ComponentError
 from objects.calendar import Calendar, Event
 
-"""-----------------------------------------------------------------------------
-Exceptions
------------------------------------------------------------------------------"""
+# ------------------------------------------------------------------------------
+# Exceptions
+# ------------------------------------------------------------------------------
 class CalendarComponentError(ComponentError): pass
 class InvalidEventId(CalendarComponentError): pass
 
-"""-----------------------------------------------------------------------------
-Business Logic
------------------------------------------------------------------------------"""
+# ------------------------------------------------------------------------------
+# Business Logic
+# ------------------------------------------------------------------------------
 class CalendarComponent(Component):
     def __init__(self, bot):
         self.bot = bot
@@ -56,20 +56,20 @@ class CalendarComponent(Component):
         self.logger = self.bot.get_logger('components.calendar')
         
         self.events = {
-            232: Event(id=232, start=date(2011, 4, 29), end=date(2011, 4, 29), title='test1', location='phark'),
-            238: Event(id=238, start=date(2011, 4, 30), end=date(2011, 4, 30), title='test2', location='phark'),
-            231: Event(id=231, start=date(2011, 4, 27), end=date(2011, 4, 27), title='test3', location='phark')
+            232: Event(id=232, start=datetime.date(2011, 4, 29), end=datetime.date(2011, 4, 29), title='test1', location='phark'),
+            238: Event(id=238, start=datetime.date(2011, 4, 30), end=datetime.date(2011, 4, 30), title='test2', location='phark'),
+            231: Event(id=231, start=datetime.date(2011, 4, 27), end=datetime.date(2011, 4, 27), title='test3', location='phark')
         }
     
     def find_calendars(self):
         return [Calendar(id=1, name='test', type=Calendar.MANUAL)]
     
-    def find_event_by_id(self, eventId):
-        if eventId == None:
-            return
+    def find_event_by_id(self, id):
+        if id == None:
+            return None
         
         try:
-            return self.events[eventId]
+            return self.events[id]
         except KeyError:
             return None
     
@@ -85,9 +85,9 @@ class CalendarComponent(Component):
     
     def insert_event(self, event):
         if event == None:
-            return
+            return None
         
-        event.id = randint(1, 10000)
+        event.id = random.randint(1, 10000)
         
         self.events[event.id] = event
         
@@ -95,7 +95,7 @@ class CalendarComponent(Component):
         
     def update_event(self, event):
         if event == None:
-            return
+            return None
         
         self.events[event.id] = event
         
@@ -110,9 +110,9 @@ class CalendarComponent(Component):
         except KeyError:
             raise InvalidEventId
         
-"""-------------------------------------------------------------------------
-Configuration
--------------------------------------------------------------------------"""
+# ------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------
 class CalenderComponentConfig(Config):
     identifier = 'components.calendar'
         

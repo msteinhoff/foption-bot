@@ -30,94 +30,170 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+list = [
+    'Nick', 'User', 'Mode', 'Quit',
+    
+    'Join', 'Part', 'Topic', 'Names', 'Invite', 'Kick',
+    
+    'Privmsg', 'Notice',
+    
+    'Motd', 'Who', 'Whois',
+    
+    'Ping', 'Pong',
+    
+    'WelcomeReply', 'YourHostReply', 'CreatedReply', 'MyInfoReply',
+    'BounceReply',
+    
+    'MotdStartReply', 'MotdReply', 'MotdEndReply',
+    
+    'AwayReply', 'UniqueOpIsReply', 'ChannelModeIsReply', 'InvitingReply',
+    
+    'TopicReply', 'NoTopicReply',
+    
+    'WhoisUserReply', 'WhoisServerReply', 'WhoisOperatorReply',
+    'WhoisIdleReply', 'WhoisChannelsReply', 'quakenet.WhoisAuthReply',
+    'WhoisEndReply',
+    
+    'WhoReply', 'WhoEndReply',
+    
+    'NamesReply', 'NamesEndReply',
+    
+    'BanListReply', 'BanListEndReply',
+    
+    'InviteListReply', 'InviteListEndReply',
+    
+    'ExceptListReply', 'ExceptListEndReply'
+    
+    'NoSuchServerError', 'TooManyTargetsError', 'NoOriginError',
+    'NoRecipientError', 'NoTextToSendError', 'NoToplevelError',
+    'WildTopLevelError', 'NoMotdError', 'UnavailableResourceError',
+    'NeedMoreParamsError', 'AlreadyRegisteredError', 'UnknownModeError',
+    'RestrictedError', 'UsersDontMachtError',
+    
+    'NoSuchNickError', 'NoNicknameGivenError', 'ErroneusNicknameError',
+    'NicknameInUseError', 'NickCollisionError',
+    
+    'NoSuchChannelError', 'KeySetError', 'ChannelIsFullError',
+    'InviteOnlyChannelError', 'BannedFromChannelError', 'BadChannelKeyError',
+    'BadChannelMaskError', 'NoChannelModesError', 'CannotSendToChannelError',
+    'TooManyChannelsError', 'UserNotInChannelError', 'NotOnChannelError',
+    'UserOnChannelError', 'ChanOpPrivilegesNeededError',
+]
+
+from core.bot import BotError
 from interaction.irc.message import Event
 
+#-------------------------------------------------------------------------------
+# Exceptions
+#-------------------------------------------------------------------------------
+class CommandError(BotError): pass
+class MissingArgumentError(CommandError): pass
+
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
 class Command(object):
     """
-    A IRC client command.
+    High-level API for IRC commands.
     """
     
     def __init__(self, client):
-        """
-        Initialize the command.
-        
-        @param client: The IRC client instance.
-        """
-        
         self.client = client
-        self._receive_listener = []
     
-    @staticmethod
-    def token(self):
-        """
-        Return the IRC command token.
-        
-        This method must be overriden each sub-class.
-        """
-        
-        raise NotImplementedError
+    def get_receiver(self):
+        return self.Receiver(self.client)
     
-    def add_receive_listener(self, callback):
-        """
-        Add a receive listener to the command instance.
-        
-        The callback function is called everytime a receive event
-        occured.
-        
-        @param callback: A pointer to the callback function. 
-        """
-        
-        self._receive_listener.append(callback)
-        
-    def receive(self, event):
-        """
-        Push a receive event to the command handler.
-        
-        This will first call the internal command logic and then notice
-        additional listeners about the event. The event itself can be
-        modified at any time, altough this is not encouraged.
-        
-        @param event: The event.
-        """
-        
-        self._receive(event)
-        
-        [callback(event) for callback in self._receive_listener]
+    def get_sender(self):
+        return self.Sender(self.client)
     
-    def send(self, *args):
+    class Receiver(object):
         """
-        Push a send event to the command handler.
+        IRC command receiver.
         
-        This enables a high-level API for IRC commands. Each command
-        handler can define python parameters, clean user input and
-        format input data according to the IRC specifications. 
+        Respond to incoming IRC events and dispatch them to all
+        registered listeners.
         """
         
-        self._send(*args)
+        def __init__(self, client):
+            """
+            Initialize the receiver object.
+            
+            @param client: The IRC client instance.
+            """
+            
+            self._listener = []
+            
+            self.client = client
+        
+        def add_listener(self, callback):
+            """
+            Add a listener to the receiver instance.
+            
+            The callback function is called everytime a receive event
+            occured.
+            
+            @param callback: A pointer to the callback function.
+            """
+            
+            self._listener.append(callback)
+            
+        def receive(self, event):
+            """
+            Push a receive event to the command handler.
+            
+            This will first call the internal command logic and then notice
+            additional listeners about the event. The event itself can be
+            modified at any time, altough this is not encouraged.
+            
+            @param event: The event object.
+            """
+            
+            self._receive(event)
+            
+            [callback(event) for callback in self._listener]
+        
+        def _receive(self, event):
+            """
+            Implement general command logic for receive events.
+            
+            This method can be overriden in sub-classes to implement
+            module-independent logic.
+            
+            @param event: The event. 
+            """
+            
+            pass
+        
+    class Sender(object):
+        def __init__(self, client):
+            self.client = client
+        
+        def check_attr(self, attr):
+            if not hasattr(self, attr):
+                raise MissingArgumentError(attr)
+        
+        def create_event(self, container, parameters):
+            return Event(None, container.token, parameters)
+        
+        def send(self):
+            """
+            Push a send event to the command handler.
+            
+            This enables a high-level API for IRC commands. Each command
+            handler can define class attributes for clean user input and
+            format input data according to the IRC specifications. 
+            """
+            
+            self.client.send_event(self._send())
+        
+        def _send(self):
+            """
+            Implement general command logic for receive events.
+            
+            @return An event to send.
+            """
+            pass
 
-    def _receive(self, event):
-        """
-        Implement general command logic for receive events.
-        
-        This method can be overriden in sub-classes to implement
-        module-independent logic.
-        
-        @param event: The event. 
-        """
-        
-        pass
-    
-    def _send(self, *args):
-        """
-        Implement general command logic for receive events.
-        
-        This method can be overriden in sub-classes to implement
-        module-independent logic.
-        
-        @param event: The event. 
-        """
-        
-        pass
 
 """-------------------------------------------------------------------------
 Section: 3.1 Connection Registration
@@ -150,8 +226,7 @@ it was registered.
 3.1.7  Quit ..............................................  14    - needed
 3.1.8  Squit .............................................  15    - not needed
 -------------------------------------------------------------------------"""
-
-class NickCmd(Command):
+class Nick(Command):
     """
     Command: NICK
     Parameters: <nickname>
@@ -166,26 +241,29 @@ class NickCmd(Command):
             ERR_UNAVAILRESOURCE             ERR_RESTRICTED
     """
     
-    @staticmethod
-    def token():
-        return 'NICK'
+    token = 'NICK'
     
-    def _receive(self, event):
-        """
-        Update the client's identity with the current nickname.
-        """
-        
-        if event.source.nickname == self.client.me.source.nickname:
-            self.client.me.rename(event.parameter[0])
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            """
+            Update the client's identity with the current nickname.
+            """
+            
+            if event.source.nickname == self.client.me.source.nickname:
+                self.client.me.rename(event.parameter[0])
     
-    def _send(self, nickname):
-        """
-        Send a request to set/change the client's nickname.
-        """
-        
-        self.client.send_event(Event(None, self.token(), [nickname]))
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Send a request to set/change the client's nickname.
+            """
+            
+            self.check_attr('nickname')
+            
+            return self.create_event(Nick, [self.nickname])
 
-class UserCmd(Command):
+
+class User(Command):
     """
     Command: USER
     Parameters: <user> <mode> <unused> <realname>
@@ -207,20 +285,26 @@ class UserCmd(Command):
             ERR_NEEDMOREPARAMS              ERR_ALREADYREGISTRED
     """
     
-    @staticmethod
-    def token():
-        return 'USER'
+    token ='USER'
     
-    def _send(self, realname, ident):
-        """
-        Register with the IRC server.
-        """
-        
-        self.client.send_event(Event(None, self.token(), [ident, '0', '*', '{0}'.format(realname)]))
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Register with the IRC server.
+            """
+            
+            self.check_attr('ident')
+            self.check_attr('realname')
+            
+            return self.create_event(User, [self.ident, '0', '*', '{0}'.format(self.realname)])
 
 
-class ModeCmd(Command):
+class Mode(Command):
     """
+    Because user mode message and channel mode are using the same command,
+    user mode and channel mode logic are implemented in the same class at 
+    the user section. 
+    
     Command: MODE
     Parameters: <nickname>
                *( ( "+" / "-" ) *( "i" / "w" / "o" / "O" / "r" ) )
@@ -272,19 +356,19 @@ class ModeCmd(Command):
             RPL_INVITELIST                  RPL_ENDOFINVITELIST
             RPL_UNIQOPIS
     """
+    
+    token = 'MODE'
+    
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            pass
+        
+    class Sender(Command.Sender):
+        def _send(self):
+            pass
 
-    
-    @staticmethod
-    def token():
-        return 'MODE'
-    
-    def _receive(self, event):
-        pass
-    
-    def _send(self, event):
-        pass
 
-class QuitCmd(Command):
+class Quit(Command):
     """
     3.1.7 Quit
     
@@ -306,23 +390,26 @@ class QuitCmd(Command):
                                        syrk has quit IRC to have lunch.
     """
     
-    @staticmethod
-    def token():
-        return 'QUIT'
+    token = 'QUIT'
     
-    def _send(self, message=None):
-        """
-        Send a quit command with a optional quit message.
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            pass
         
-        @param message: The quit message.
-        """
-        
-        parameter = []
-        
-        if message is not None:
-            parameter.append(message)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Send a quit command with a optional quit message.
+            
+            @param message: The quit message.
+            """
+            
+            parameter = []
+            
+            if hasattr(self, 'message') and self.message is not None:
+                parameter.append(self.message)
+            
+            return self.create_event(Quit, parameter)
 
 
 """
@@ -350,8 +437,7 @@ itself.
 3.2.7  Invite message ....................................  21    - not needed (maybe implemented in the future)
 3.2.8  Kick command ......................................  22    - needed
 -------------------------------------------------------------------------"""
-
-class JoinCmd(Command):
+class Join(Command):
     """
     Command: JOIN
     Parameters: ( <channel> *( "," <channel> ) [ <key> *( "," <key> ) ] )
@@ -384,30 +470,30 @@ class JoinCmd(Command):
             ERR_TOOMANYTARGETS              ERR_UNAVAILRESOURCE
             RPL_TOPIC
     """
-    @staticmethod
-    def token():
-        return 'JOIN'
+    token = 'JOIN'
     
-    def _send(self, channels, keys=None):
-        """
-        Join a channel.
-        
-        @param channels: The channel names.
-        @param keys: The optional channel keys.
-        """
-        
-        if channels is None:
-            parameter = ['0']
-        
-        else:
-            parameter = [','.join(channels)]
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Join a channel.
             
-            if keys is not None:
-                parameter.append(','.join(keys))
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+            @param channels: The channel names.
+            @param keys: The optional channel keys.
+            """
+            
+            if hasattr(self, 'channels') and self.channels is None:
+                parameter = ['0']
+            
+            else:
+                parameter = [','.join(self.channels)]
+                
+                if hasattr(self, 'keys') and self.keys is not None:
+                    parameter.append(','.join(self.keys))
+            
+            return self.create_event(Join, parameter)
 
-class PartCmd(Command):
+
+class Part(Command):
     """
     Command: PART
     Parameters: <channel> *( "," <channel> ) [ <Part Message> ]
@@ -427,32 +513,29 @@ class PartCmd(Command):
             ERR_NEEDMOREPARAMS              ERR_NOSUCHCHANNEL
             ERR_NOTONCHANNEL
     """
-    @staticmethod
-    def token():
-        return 'PART'
     
-    def _send(self, channel, message=None):
-        """
-        Part a channel.
-        
-        @param channel: The channel name.
-        @param message: The optional part message.
-        """
-        
-        parameter = [channel]
-        
-        if message is not None:
-            parameter.append(message)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    token = 'PART'
+    
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Part a channel.
+            
+            @param channel: The channel name.
+            @param message: The optional part message.
+            """
+            
+            self.check_attr('channel')
+           
+            parameter = [self.channel]
+            
+            if self.message is not None:
+                parameter.append(self.message)
+            
+            return self.create_event(Part, parameter)
 
-"""
-Because user mode message and channel mode are using the same command,
-user mode and channel mode logic are implemented in the same class at 
-the user section. 
-"""
 
-class TopicCmd(Command):
+class Topic(Command):
     """
     Command: TOPIC
     Parameters: <channel> [ <topic> ]
@@ -470,18 +553,25 @@ class TopicCmd(Command):
             RPL_NOTOPIC                     RPL_TOPIC
             ERR_CHANOPRIVSNEEDED            ERR_NOCHANMODES
     """
-    @staticmethod
-    def token():
-        return 'TOPIC'
     
-    def _send(self, channel, topic=None):
-        """
-        Get/set a channels topic.
-        """
-        
-        self.client.send_event(Event(None, self.token(), [topic]))
+    token = 'TOPIC'
+    
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Get/set a channels topic.
+            """
+            
+            self.check_attr('channel')
+            
+            parameter = [self.channel]
+            
+            if hasattr(self, 'topic') and self.topic is not None:
+                parameter.append(self.topic)
+            
+            return self.create_event(Topic, parameter)
 
-class NamesCmd(Command):
+class Names(Command):
     """
     Command: NAMES
     Parameters: [ <channel> *( "," <channel> ) [ <target> ] ]
@@ -507,18 +597,20 @@ class NamesCmd(Command):
             ERR_TOOMANYMATCHES              ERR_NOSUCHSERVER
             RPL_NAMREPLY                    RPL_ENDOFNAMES
     """
-    @staticmethod
-    def token():
-        return 'NAMES'
+    token = 'NAMES'
     
-    def _send(self, channels):
-        """
-        Request a NAMES list.
-        """
-        
-        self.client.send_event(Event(None, self.token(), [','.join(channels)]))
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Request a NAMES list.
+            """
+            
+            self.check_attr('channels')
+            
+            return self.create_event(Names, [','.join(self.channels)])
 
-class InviteCmd(Command):
+
+class Invite(Command):
     """
     Command: INVITE
     Parameters: <nickname> <channel>
@@ -543,14 +635,17 @@ class InviteCmd(Command):
             ERR_CHANOPRIVSNEEDED
             RPL_INVITING                    RPL_AWAY
     """
-    @staticmethod
-    def token():
-        return 'INVITE'
+    token = 'INVITE'
     
-    def _send(self, nickname, channel):
-        self.client.send_event(Event(None, self.token(), [nickname, channel]))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('nickname')
+            self.check_attr('channel')
+            
+            return self.create_event(Invite, [self.nickname, self.channel])
 
-class KickCmd(Command):
+
+class Kick(Command):
     """
     Command: KICK
     Parameters: <channel> *( "," <channel> ) <user> *( "," <user> )
@@ -574,17 +669,19 @@ class KickCmd(Command):
             ERR_BADCHANMASK                 ERR_CHANOPRIVSNEEDED
             ERR_USERNOTINCHANNEL            ERR_NOTONCHANNEL
     """
-    @staticmethod
-    def token():
-        return 'KICK'
+    token = 'KICK'
     
-    def _send(self, channels, users, message=None):
-        parameter = [','.join(channels), ','.join(users)]
-        
-        if message is not None:
-            parameter.append(message)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('channels')
+            self.check_attr('users')
+            
+            parameter = [','.join(self.channels), ','.join(self.users)]
+            
+            if hasattr(self, 'message') and self.message is not None:
+                parameter.append(self.message)
+            
+            return self.create_event(Kick, parameter)
 
 
 """
@@ -602,7 +699,7 @@ to ensure it happens in a reliable and structured manner.
 3.3.2  Notice ............................................  24    - needed
 -------------------------------------------------------------------------"""
 
-class PrivmsgCmd(Command):
+class Privmsg(Command):
     """
     Command: PRIVMSG
     Parameters: <msgtarget> <text to be sent>
@@ -628,18 +725,21 @@ class PrivmsgCmd(Command):
             ERR_NOSUCHNICK
             RPL_AWAY
     """
-    @staticmethod
-    def token():
-        return 'PRIVMSG'
+    token = 'PRIVMSG'
     
-    def _receive(self, event):
-        if not event.parameter[0].startswith('#') and event.parameter[1] == 'fotzenscheisse':
-            self.client.send_command(QuitCmd)
-    
-    def _send(self, target, text):
-        self.client.send_event(Event(None, self.token(), [target, text]))
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            if not event.parameter[0].startswith('#') and event.parameter[1] == 'fotzenscheisse':
+                self.client.stop()
+        
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('target')
+            self.check_attr('text')
+            
+            return self.create_event(Privmsg, [self.target, self.text])
 
-class NoticeCmd(Command):
+class Notice(Command):
     """
     Command: NOTICE
     Parameters: <msgtarget> <text>
@@ -659,12 +759,14 @@ class NoticeCmd(Command):
     
     See PRIVMSG for more details on replies and examples.
     """
-    @staticmethod
-    def token():
-        return 'NOTICE'
+    token = 'NOTICE'
     
-    def _send(self, target, text):
-        self.client.send_event(Event(None, self.token(), [target, text]))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('target')
+            self.check_attr('text')
+
+            return self.create_event(Notice, [self.target, self.text])
 
 
 """
@@ -682,7 +784,7 @@ Section: 3.4 Server queries and commands
 3.4.9  Admin command .....................................  30    - not needed
 3.4.10 Info command ......................................  31    - not needed
 -------------------------------------------------------------------------"""
-class MotdCmd(Command):
+class Motd(Command):
     """
     Command: MOTD
     Parameters: [ <target> ]
@@ -698,17 +800,16 @@ class MotdCmd(Command):
             RPL_ENDOFMOTD                   ERR_NOMOTD
 
     """
-    @staticmethod
-    def token():
-        return 'MOTD'
+    token = 'MOTD'
     
-    def _send(self, target=None):
-        parameter = []
-        
-        if target is not None:
-            parameter.append(target)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            parameter = []
+            
+            if hasattr(self, 'target') and self.target is not None:
+                parameter.append(self.target)
+            
+            return self.create_event(Motd, parameter)
 
 
 """
@@ -727,7 +828,7 @@ Section: 3.6 User based queries
 3.6.2  Whois query .......................................  33    - needed
 3.6.3  Whowas ............................................  34    - not needed
 -------------------------------------------------------------------------"""
-class WhoCmd(Command):
+class Who(Command):
     """
     Command: WHO
     Parameters: [ <mask> [ "o" ] ]
@@ -751,20 +852,21 @@ class WhoCmd(Command):
             ERR_NOSUCHSERVER
             RPL_WHOREPLY                  RPL_ENDOFWHO
     """
-    @staticmethod
-    def token():
-        return 'WHO'
+    token = 'WHO'
     
-    def _send(self, mask, operators=False):
-        parameter = mask
-        
-        if operators:
-            parameter.append('o')
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('mask')
+            
+            parameter = [self.mask]
+            
+            if hasattr(self, 'operators') and self.operators:
+                parameter.append('o')
+            
+            return self.create_event(Who, parameter)
 
 
-class WhoisCmd(Command):
+class Whois(Command):
     """
     Command: WHOIS
     Parameters: [ <target> ] <mask> *( "," <mask> )
@@ -794,21 +896,23 @@ class WhoisCmd(Command):
             RPL_ENDOFWHOIS
 
     """
-    @staticmethod
-    def token():
-        return 'WHOIS'
+    token = 'WHOIS'
     
-    def _send(self, user, server=None):
-        parameter = []
-        
-        if server is not None:
-            parameter.append(server)
-        
-        # add user 2x for extended whois
-        parameter.append(user)
-        parameter.append(user)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('user')
+            
+            parameter = []
+            
+            if hasattr(self, 'server') and self.server is not None:
+                parameter.append(self.server)
+            
+            # add user 2x for extended whois
+            parameter.append(self.user)
+            parameter.append(self.user)
+            
+            return self.create_event(Whois, parameter)
+
 
 """
 ----------------------------------------------------------------------------
@@ -819,7 +923,7 @@ Section: 3.7 Miscellaneous messages
 3.7.3  Pong message ......................................  37    - needed
 3.7.4  Error .............................................  37    - not needed
 -------------------------------------------------------------------------"""
-class PingCmd(Command):
+class Ping(Command):
     """
     Command: PING
     Parameters: <server1> [ <server2> ]
@@ -841,18 +945,22 @@ class PingCmd(Command):
     
             ERR_NOORIGIN                  ERR_NOSUCHSERVER
     """
-    @staticmethod
-    def token():
-        return 'PING'
+    token = 'PING'
     
-    def _receive(self, event):
-        if len(event.parameter) == 1:
-            self.client.send_command(PongCmd, event.parameter[0])
-        
-        if len(event.parameter) == 2:
-            self.client.send_command(PongCmd, event.parameter[0], event.parameter[1])
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            pong = self.client.get_command('Pong').get_sender()
+            
+            if len(event.parameter) == 1:
+                pong.server = event.parameter[0]
+            
+            if len(event.parameter) == 2:
+                pong.server = event.parameter[0]
+                pong.server2 = event.parameter[1]
+                
+            pong.send()
 
-class PongCmd(Command):
+class Pong(Command):
     """
     Command: PONG
     Parameters: <server> [ <server2> ]
@@ -866,17 +974,19 @@ class PongCmd(Command):
     
             ERR_NOORIGIN                  ERR_NOSUCHSERVER
     """
-    @staticmethod
-    def token():
-        return 'PONG'
+    token = 'PONG'
     
-    def _send(self, server, server2=None):
-        parameter = [server]
-        
-        if server2 is not None:
-            parameter.append(server2)
-        
-        self.client.send_event(Event(None, self.token(), parameter))
+    class Sender(Command.Sender):
+        def _send(self):
+            self.check_attr('server')
+            
+            parameter = [self.server]
+            
+            if hasattr(self, 'server2') and self.server2:
+                parameter.append(self.server2)
+            
+            return self.create_event(Pong, parameter)
+
 
 """-----------------------------------------------------------------------------
    5.  Replies ....................................................  43
@@ -888,123 +998,77 @@ Numerics in the range from 001 to 099 are used for client-server
 connections only and should never travel between servers.
 -----------------------------------------------------------------------------"""
 class WelcomeReply(Command):
-    @staticmethod
-    def token():
-        return '001'
+    token = '001'
 
 class YourHostReply(Command):
-    @staticmethod
-    def token():
-        return '002'
+    token = '002'
 
 class CreatedReply(Command):
-    @staticmethod
-    def token():
-        return '003'
+    token = '003'
 
 class MyInfoReply(Command):
-    @staticmethod
-    def token():
-        return '004'
+    token = '004'
     
 class BounceReply(Command):
-    @staticmethod
-    def token():
-        return '005'
+    token = '005'
 
 """-----------------------------------------------------------------------------
 Replies generated in the response to commands are found in the
 range from 200 to 399.
 -----------------------------------------------------------------------------"""
 class AwayReply(Command):
-    @staticmethod
-    def token():
-        return '301'
+    token = '301'
 
 class WhoisUserReply(Command):
-    @staticmethod
-    def token():
-        return '311'
+    token = '311'
 
 class WhoisServerReply(Command):
-    @staticmethod
-    def token():
-        return '312'
+    token = '312'
 
 class WhoisOperatorReply(Command):
-    @staticmethod
-    def token():
-        return '313'
+    token = '313'
 
 class WhoEndReply(Command):
-    @staticmethod
-    def token():
-        return '315'
+    token = '315'
 
 class WhoisIdleReply(Command):
-    @staticmethod
-    def token():
-        return '317'
+    token = '317'
 
 class WhoisEndReply(Command):
-    @staticmethod
-    def token():
-        return '318'
+    token = '318'
 
 class WhoisChannelsReply(Command):
-    @staticmethod
-    def token():
-        return '319'
+    token = '319'
 
 class UniqueOpIsReply(Command):
-    @staticmethod
-    def token():
-        return '325'
+    token = '325'
 
 class ChannelModeIsReply(Command):
-    @staticmethod
-    def token():
-        return '324'
+    token = '324'
 
 class NoTopicReply(Command):
-    @staticmethod
-    def token():
-        return '331'
+    token = '331'
 
 class TopicReply(Command):
-    @staticmethod
-    def token():
-        return '332'
+    token = '332'
 
 class InvitingReply(Command):
-    @staticmethod
-    def token():
-        return '341'
+    token = '341'
 
 class InviteListReply(Command):
-    @staticmethod
-    def token():
-        return '346'
+    token = '346'
 
 class InviteListEndReply(Command):
-    @staticmethod
-    def token():
-        return '347'
+    token = '347'
 
 class ExceptListReply(Command):
-    @staticmethod
-    def token():
-        return '348'
+    token = '348'
 
 class ExceptListEndReply(Command):
-    @staticmethod
-    def token():
-        return '349'
+    token = '349'
 
 class WhoReply(Command):
-    @staticmethod
-    def token():
-        return '352'
+    token = '352'
 
 class NamesReply(Command):
     """
@@ -1017,210 +1081,132 @@ class NamesReply(Command):
       "*" for private channels, and
       "=" for others (public channels).
     """
-    @staticmethod
-    def token():
-        return '353'
+    token = '353'
 
 class NamesEndReply(Command):
-    @staticmethod
-    def token():
-        return '366'
+    token = '366'
 
 class BanListReply(Command):
-    @staticmethod
-    def token():
-        return '367'
+    token = '367'
 
 class BanListEndReply(Command):
-    @staticmethod
-    def token():
-        return '368'
+    token = '368'
 
 class MotdReply(Command):
-    @staticmethod
-    def token():
-        return '372'
+    token = '372'
 
 class MotdStartReply(Command):
-    @staticmethod
-    def token():
-        return '375'
+    token = '375'
 
 class MotdEndReply(Command):
-    @staticmethod
-    def token():
-        return '376'
+    token = '376'
     
-    def _receive(self, event):
-        self.client.post_connect()
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            self.client.post_connect()
 
 """-----------------------------------------------------------------------------
 Error replies are found in the range from 400 to 599.
 -----------------------------------------------------------------------------"""
 class NoSuchNickError(Command):
-    @staticmethod
-    def token():
-        return '401'
+    token = '401'
 
 class NoSuchServerError(Command):
-    @staticmethod
-    def token():
-        return '402'
+    token = '402'
 
 class NoSuchChannelError(Command):
-    @staticmethod
-    def token():
-        return '403'
+    token = '403'
 
 class CannotSendToChannelError(Command):
-    @staticmethod
-    def token():
-        return '404'
+    token = '404'
 
 class TooManyChannelsError(Command):
-    @staticmethod
-    def token():
-        return '405'
+    token = '405'
 
 class TooManyTargetsError(Command):
-    @staticmethod
-    def token():
-        return '407'
+    token = '407'
 
 class NoOriginError(Command):
-    @staticmethod
-    def token():
-        return '409'
+    token = '409'
 
 class NoRecipientError(Command):
-    @staticmethod
-    def token():
-        return '411'
+    token = '411'
 
 class NoTextToSendError(Command):
-    @staticmethod
-    def token():
-        return '412'
+    token = '412'
 
 class NoToplevelError(Command):
-    @staticmethod
-    def token():
-        return '413'
+    token = '413'
 
 class WildTopLevelError(Command):
-    @staticmethod
-    def token():
-        return '414'
+    token = '414'
 
 class NoMotdError(Command):
-    @staticmethod
-    def token():
-        return '422'
+    token = '422'
     
-    def _receive(self, event):
-        self.client.post_connect()
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            self.client.post_connect()
 
 class NoNicknameGivenError(Command):
-    @staticmethod
-    def token():
-        return '431'
+    token = '431'
 
 class ErroneusNicknameError(Command):
-    @staticmethod
-    def token():
-        return '432'
+    token = '432'
 
 class NicknameInUseError(Command):
-    @staticmethod
-    def token():
-        return '433'
+    token = '433'
 
 class NickCollisionError(Command):
-    @staticmethod
-    def token():
-        return '436'
+    token = '436'
 
 class UnavailableResourceError(Command):
-    @staticmethod
-    def token():
-        return '437'
+    token = '437'
 
 class UserNotInChannelError(Command):
-    @staticmethod
-    def token():
-        return '441'
+    token = '441'
 
 class NotOnChannelError(Command):
-    @staticmethod
-    def token():
-        return '442'
+    token = '442'
 
 class UserOnChannelError(Command):
-    @staticmethod
-    def token():
-        return '443'
+    token = '443'
 
 class NeedMoreParamsError(Command):
-    @staticmethod
-    def token():
-        return '461'
+    token = '461'
 
 class AlreadyRegisteredError(Command):
-    @staticmethod
-    def token():
-        return '462'
+    token = '462'
 
 class KeySetError(Command):
-    @staticmethod
-    def token():
-        return '467'
+    token = '467'
 
 class ChannelIsFullError(Command):
-    @staticmethod
-    def token():
-        return '471'
+    token = '471'
 
 class UnknownModeError(Command):
-    @staticmethod
-    def token():
-        return '472'
+    token = '472'
 
 class InviteOnlyChannelError(Command):
-    @staticmethod
-    def token():
-        return '473'
+    token = '473'
 
 class BannedFromChannelError(Command):
-    @staticmethod
-    def token():
-        return '474'
+    token = '474'
 
 class BadChannelKeyError(Command):
-    @staticmethod
-    def token():
-        return '475'
+    token = '475'
     
 class BadChannelMaskError(Command):
-    @staticmethod
-    def token():
-        return '476'
+    token = '476'
 
 class NoChannelModesError(Command):
-    @staticmethod
-    def token():
-        return '477'
+    token = '477'
 
 class ChanOpPrivilegesNeededError(Command):
-    @staticmethod
-    def token():
-        return '482'
+    token = '482'
 
 class RestrictedError(Command):
-    @staticmethod
-    def token():
-        return '484'
+    token = '484'
 
 class UsersDontMachtError(Command):
-    @staticmethod
-    def token():
-        return '502'
+    token = '502'

@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 @since Apr 26, 2011
-@author msteinhoff
+@author Mario Steinhoff
 """
 
 __version__ = '$Rev$'
@@ -36,9 +36,16 @@ class Principal(object):
         self.password = password
         self.role = role
 
+
+class Right(object):
+    def __init__(self, name=None, mask=None):
+        self.name = name
+        self.mask = mask
+
+
 class Role(object):
     """
-    Represent a role neccessary to execute a InteractiveModuleCommand.
+    Represent a role.
     
     Right.USER   = 1
     Right.AUTHED = 2

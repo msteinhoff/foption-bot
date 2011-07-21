@@ -64,7 +64,7 @@ def config_init(args):
     def _init(identifier, object):
         print 'initializing configuration: {0}'.format(identifier)
         
-        object.init()
+        object.init(object.default_values())
         object.save()
     
     if args.identifier == None:

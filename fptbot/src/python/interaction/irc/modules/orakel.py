@@ -29,46 +29,67 @@ THE SOFTWARE.
 @author Mario Steinhoff
 """
 
-__version__ = '$$'
+__version__ = '$Rev$'
 
 import random
 import re
 
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply
 
+#-------------------------------------------------------------------------------
+# Business Logic
+#-------------------------------------------------------------------------------
 class Orakel(InteractiveModule):
     """
     This module aids the user to make a decision.
     """
 
+    #---------------------------------------------------------------------------
+    # InteractiveModule implementation
+    #---------------------------------------------------------------------------
     def module_identifier(self):
         return 'Orakel'
     
     def init_commands(self):
         return [
-            InteractiveModuleCommand(keyword='wer', callback=self.who),
-            InteractiveModuleCommand(keyword='decide', callback=self.decide, pattern=r'^((.+)$|$)', syntaxhint='[Auswahl1[, [Auswahl2[, ...]]]]')
+            InteractiveModuleCommand(
+                keyword='wer', 
+                callback=self.who
+            ),
+            InteractiveModuleCommand(
+                keyword='decide',
+                callback=self.decide,
+                pattern=r'^((.+)$|$)',
+                syntaxhint='[Auswahl1[, [Auswahl2[, ...]]]]'
+            )
         ]
     
+    #---------------------------------------------------------------------------
+    # module commands
+    #---------------------------------------------------------------------------
     def who(self, event, location, command, parameter):
+        reply = InteractiveModuleReply()
+        
         channel_name = event.parameter[0]
         
         channel = self.usermgmt.chanlist.get(channel_name)
         
         user = random.choice(channel.get_users().keys())
         
-        reply = 'Meine Wahl fällt auf {0}!'.format(user)
+        reply.add_line('Meine Wahl fällt auf {0}!'.format(user))
         
         return reply
     
     def decide(self, event, location, command, parameter):
+        reply = InteractiveModuleReply()
+        
         issue = parameter[0]
         
         if len(issue) == 0:
-            if (random.randint(1,1000) % 2 == 0):
-                reply = 'Du solltst dich dafür entscheiden!'
+            if random.randint(1,1000) % 2 == 0:
+                reply.add_line('Du solltst dich dafür entscheiden!')
             else:
-                reply = 'Du solltst dich dagegen entscheiden!'
+                reply.add_line('Du solltst dich dagegen entscheiden!')
         
         else:
             choices = re.sub('( oder | or )', ',', issue).split(',')
@@ -77,13 +98,13 @@ class Orakel(InteractiveModule):
                 pick = choices[0]
                 
                 if random.randint(1,1000) % 2 == 0:
-                    reply = 'Du solltst dich für \'{0}\' entscheiden!'.format(pick.strip())
+                    reply.add_line('Du solltst dich für \'{0}\' entscheiden!'.format(pick.strip()))
                 else:
-                    reply = 'Du solltst dich gegen \'{0}\' entscheiden'.format(pick.strip())
+                    reply.add_line('Du solltst dich gegen \'{0}\' entscheiden'.format(pick.strip()))
             else:
                 pick = random.choice(choices)
                 
-                reply = 'Du solltst dich für \'{0}\' entscheiden'.format(pick.strip())
+                reply.add_line('Du solltst dich für \'{0}\' entscheiden'.format(pick.strip()))
         
         return reply
     

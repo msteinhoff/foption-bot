@@ -31,4 +31,6 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 __all__ = [
+    'server',
+    'client'
 ]
