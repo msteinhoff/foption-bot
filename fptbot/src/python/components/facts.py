@@ -65,7 +65,7 @@ class FactsComponent(Component):
         )
     
     # --------------------------------------------------------------------------
-    # Management
+    # Lifecycle
     # --------------------------------------------------------------------------
     def start(self):
         self.bot.get_timer('components.facts.update').start()
