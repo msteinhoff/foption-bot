@@ -37,18 +37,29 @@ import sqlite3
 # ------------------------------------------------------------------------------
 class DatabaseError(Exception): pass
 
+class SqliteMapping():
+    def get_type(self):
+        raise NotImplementedError
+    
+    def get_typename(self):
+        raise NotImplementedError
+    
+    def adapt(self, value):
+        raise NotImplementedError
+    
+    def convert(self, value):
+        raise NotImplementedError
+
 # ------------------------------------------------------------------------------
 # Business Logic
 # ------------------------------------------------------------------------------
 class Persistence(object):
     """
-    Provide persistence to all sub-systems.
-    
-    Currently, the following storage systems are supported:
-        - pickle.dump/pickle.load
-        - file.readlines/file.writelines
-        - sqlite
+    Provide sqlite persistence to all sub-systems.
     """
+    
+    type_mapping = []
+    
     
     def __init__(self, sqlite_file):
         """
@@ -59,6 +70,12 @@ class Persistence(object):
         
         self.connection = sqlite3.connect(sqlite_file)
         self.connection.row_factory = sqlite3.Row
+        
+        for clazz in self.type_mapping:
+            object = clazz()
+            sqlite3.register_adapter(object.type, object.adapt)
+            sqlite3.register_converter(object.typename, callable)
+            
         
     def get_connection(self):
         """
@@ -73,3 +90,5 @@ class Persistence(object):
         """
         
         return self.connection.cursor()
+
+

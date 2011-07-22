@@ -35,7 +35,7 @@ import datetime
 
 from core.config import Config
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event
+from objects.calendar import Calendar, Event, Contact
 
 # ------------------------------------------------------------------------------
 # Exceptions
@@ -55,58 +55,79 @@ class CalendarComponent(Component):
         self.config = self.bot.get_config('components.calendar')
         self.logger = self.bot.get_logger('components.calendar')
         
-        self.events = {
-            232: Event(id=232, start=datetime.date(2011, 4, 29), end=datetime.date(2011, 4, 29), title='test1', location='phark'),
-            238: Event(id=238, start=datetime.date(2011, 4, 30), end=datetime.date(2011, 4, 30), title='test2', location='phark'),
-            231: Event(id=231, start=datetime.date(2011, 4, 27), end=datetime.date(2011, 4, 27), title='test3', location='phark')
-        }
+        self.datastore = None
     
+    # --------------------------------------------------------------------------
+    # Lifecycle
+    # --------------------------------------------------------------------------
+    def start(self):
+        self.datastore = DataStore()
+        
+        # Setup primary backend
+        persistence = self.bot.get_persistence()
+        sqlite = SqliteBackend(persistence.get_connection())
+        self.datastore.set_primary_backend(sqlite)
+        
+        # Setup secondary backend
+        google = GoogleBackend()
+        self.datastore.register_secondary_backend(google)
+        
+    def shutdown(self):
+        self.datastore = None
+    
+    # --------------------------------------------------------------------------
+    # Component methods
+    # --------------------------------------------------------------------------
     def find_calendars(self):
-        return [Calendar(id=1, name='test', type=Calendar.MANUAL)]
+        query = self.datastore.get_query('all_calendars')
+        
+        return self.datastore.find_objects(query)
     
     def find_event_by_id(self, id):
         if id == None:
             return None
         
-        try:
-            return self.events[id]
-        except KeyError:
-            return None
+        query = self.datastore.get_query('event_by_id')
+        query.id = id
+        
+        return self.datastore.find_objects(query)
     
     def find_events_by_date(self, date):
-        result = []
+        if date == None:
+            return None
         
-        if date != None:
-            for event in self.events.values():
-                if event.start <= date <= event.end:
-                    result.append(event)
+        query = self.datastore.get_query('events_at_date')
+        query.date = date
         
-        return result
+        return self.datastore.find_objects(query)
     
     def insert_event(self, event):
         if event == None:
             return None
         
-        event.id = random.randint(1, 10000)
+        if event.id != None:
+            raise ValueError('event.id must be None')
         
-        self.events[event.id] = event
-        
-        return event
+        return self.datastore.insert_object(event)
         
     def update_event(self, event):
         if event == None:
             return None
         
-        self.events[event.id] = event
+        if event.id == None:
+            raise ValueError('event.id must be given')
         
-        return event
+        try:
+            return self.datastore.update_object(event)
+        except KeyError:
+            raise InvalidEventId
         
     def delete_event(self, eventId):
         if eventId == None:
             return
         
         try:
-            del(self.events[eventId])
+            self.datastore.delete_object(Event, eventId)
         except KeyError:
             raise InvalidEventId
 
@@ -120,7 +141,11 @@ class DataStore():
     The data store manages all backend systems and data synchronization
     between the primary and secondary backends.
     """
-
+    
+    def __init__(self):
+        self.primary_backend = None
+        self.secondary_backends = []
+    
     def set_primary_backend(self, backend):
         """
         Set a backend object as the primary backend.
@@ -130,7 +155,7 @@ class DataStore():
         @return Nothing
         """
         
-        raise NotImplementedError
+        self.primary_backend = backend
     
     def notify_primary_backend(self, source, operation, type, id):
         """
@@ -143,7 +168,7 @@ class DataStore():
         
         A change can be a insert, update or delete operation.
         
-        @param source: The backend that initiated the change.
+        @param source: The backend instance that initiated the change.
         @param operation: The change mode, can be insert, update or delete.
         @param type: The data type of the changed object.
         @param id: The id of the changed object.
@@ -151,7 +176,7 @@ class DataStore():
         @return Nothing
         """
         
-        raise NotImplementedError
+        self.primary_backend.handle_incoming_change(self, source, operation, type, id)
     
     def register_secondary_backend(self, backend):
         """
@@ -162,9 +187,9 @@ class DataStore():
         @return Nothing
         """
         
-        raise NotImplementedError
+        self.secondary_backends.append(backend)
     
-    def notify_secondary_backends(self, operation, type, id):
+    def notify_secondary_backends(self, source, operation, type, id):
         """
         Notify all secondary backends about a data change.
         
@@ -174,6 +199,7 @@ class DataStore():
         
         A change can be a insert, update or delete operation.
         
+        @param source: The backend instance that initiated the change.
         @param operation: The change mode, can be insert, update or delete.
         @param type: The data type of the changed object.
         @param id: The id of the changed object.
@@ -181,76 +207,117 @@ class DataStore():
         @return Nothing
         """
         
-        raise NotImplementedError
+        for backend in self.secondary_backends:
+            # ignore source
+            if backend.__class__.__name__ == source:
+                continue
+            
+            backend.handle_incoming_change(self, source, operation, type, id)
     
-    def find_objects(self, object):
-        """
-        Find objects with the given search criteria in the primary backend.
-        Wildcards can be used.
+    def get_query(self, name):
+        """"
+        Return a new query object with the given name.
+        A query object is used to query the backends for specific objects.
         
-        TODO: advanced find using sql queries.
+        @param name: The name of the query.
         
-        @param object: The object with search criteria.
-        
-        @return A list with matches. List will be empty if nothing was found.
+        @return A new DataStoreQuery instance.
         """
         
-        raise NotImplementedError
+        query_object = DataStoreQuery(name)
+        
+        return query_object
     
-    def create_object(self, object):
+    def find_objects(self, query_object):
         """
-        Create a new object in the registered primary/secondary backends.
+        Find objects in the primary backend using a query object.
         
-        @param object: The object to create.
+        @param query_object: The query_object with search criteria.
+        
+        @return A list with matching objects. The List will be empty if
+        nothing was found.
+        """
+        
+        return self.primary_backend.find_objects(self, query_object)
+    
+    def insert_object(self, object):
+        """
+        insert a new object in the primary backend.
+        
+        @param object: The object to insert.
         
         @return The given object with a populated id attribute.
         """
         
-        raise NotImplementedError
+        return self.primary_backend.insert_object(self, object)
     
     def update_object(self, object):
         """
-        Update an existing object in the registered primary/secondary backends.
+        Update an existing object in the primary backend.
         
         @param object: The object to update.
         """
         
-        raise NotImplementedError
+        return self.primary_backend.update_object(self, object)
     
-    def remove_object(self, type, id):
+    def delete_object(self, type, id):
         """
-        Delete an existing object in the registered primary/secondary backends.
+        Delete an existing object in the primary backend.
         
         @param type: The data type of the object to delete.
         @param id: The id of the object to delete.
         """
         
-        raise NotImplementedError
+        return self.primary_backend.delete_object(self, type, id)
+
+class DataStoreQuery():
+    """
+    An abstract data store query.
+    
+    This object only contains the general name of the specific query.
+    Arbitrary query parameters can be added at runtime. When the query is run
+    against the backends, the name is used to identify the concrete query
+    objects provided by the backends.
+    """
+    
+    def __init__(self, name):
+        """
+        Instantiate a new query object.
+        
+        @param name: The query name.
+        """
+        
+        self.__query_name = name
+        
+    def get_name(self):
+        """
+        Return the query name.
+        
+        @return The query name.
+        """
+        
+        return self.__query_name
+    
+    def get_parameters(self):
+        """
+        Return a dictionary with query parameters.
+        
+        @return A dictionary with query parameters.
+        """
+        
+        # TODO filter private attributes
+        return self.__dict__
 
 class Backend():
     """
     A generic backend.
     """
-    def __init__(self):
-        """
-        Instantiate the backend.
-        """
         
-        self.datastore = None
-        
-    def set_datastore(self, datastore):
-        """
-        Set the current datastore to work with.
-        
-        @param datastore: The datastore instance.
-        """
-        
-        self.datastore = datastore
-    
-    def handle_incoming_change(self, source, operation, type, id):
+    def handle_incoming_change(self, context, source, operation, type, id):
         """
         Respond to a data change.
         
+        @param context: The datastore context.
         @param source: The backend where the change occured.
         @param operation: The change mode, can be insert, update or delete.
         @param type: The data type of the changed object.
@@ -261,46 +328,365 @@ class Backend():
         
         raise NotImplementedError
     
-    def create_object(self, object):
+    def find_objects(self, context, query_object):
         """
-        Create a new data object.
+        Find objects in the primary backend using a query object.
         
-        @param object: The object to create.
+        @param context: The datastore context.
+        @param query_object: The query_object with search criteria.
+        
+        @return A list with matching objects. The List will be empty if
+        nothing was found.
+        """
+        
+        raise NotImplementedError
+    
+    def insert_object(self, context, object):
+        """
+        insert a new data object.
+        
+        @param context: The datastore context.
+        @param object: The object to insert.
         
         @return The given object with a populated id attribute.
         """
         
         raise NotImplementedError
     
-    def update_object(self, object):
+    def update_object(self, context, object):
         """
         Update an existing object.
         
+        @param context: The datastore context.
         @param object: The object to update.
         """
         
         raise NotImplementedError
     
-    def remove_object(self, type, id):
+    def delete_object(self, context, type, id):
         """
         Delete an existing object.
         
+        @param context: The datastore context.
         @param type: The data type of the object to delete.
         @param id: The id of the object to delete.
         """
         
         raise NotImplementedError
 
-
-
 class SqliteBackend(Backend):
-    def set_cursor(self):
-        pass
+    """
+    Backend implementation using a local sqlite database.
+    
+    TODO: implement object space.
+    """
+    
+    class Query():
+        """
+        Implement a simple sqlite query.
+        """
+        
+        def __init__(self, type, query):
+            """
+            Instantiate a new query.
+            
+            @param query: The SQL query that gets executed.
+            """
+            self.type = type
+            self.query = query
+            
+        def get_type(self):
+            """
+            Return the data type of the query result.
+            
+            @return The data type of the query result.
+            """
+            
+            return self.type
+            
+        def execute(self, connection, parameters={}):
+            """
+            Execute the query.
+            
+            @param connection: The sqlite connection to use.
+            @param parameters: A optional list of named parameters.
+            
+            @return 
+            """
+            return connection.execute(self.query, parameters)
+        
+    def __init__(self, persistence):
+        """
+        Initialize the sqlite backend.
+        
+        @param persistence: The bot persistence.
+        """
+        
+        self.connection = persistence.get_connection()
+        
+        self.query_list = {
+            'last_calendar_id'     : self.Query(Calendar, 'SELECT last_insert_rowid() AS ID FROM CALENDARS'),
+            'find_all_calendars'   : self.Query(Calendar, 'SELECT ID, NAME, TYPE FROM CALENDARS'),
+            'find_calendar_by_ids' : self.Query(Calendar, 'SELECT ID, NAME, TYPE FROM CALENDARS WHERE ID IN (:ids)'),
+            'insert_calendar'      : self.Query(Calendar, 'INSERT INTO CALENDARS (ID, NAME, TYPE) VALUES (NULL, :name, :type)'),
+            'update_calendar'      : self.Query(Calendar, 'UPDATE CALENDARS SET NAME=:name, TYPE=:type WHERE ID=:id'),
+            'delete_calendar'      : self.Query(Calendar, 'DELETE FROM CALENDARS WHERE ID=:id'),
+            
+            'last_event_id'        : self.Query(Event, 'SELECT last_insert_rowid() AS ID FROM EVENTS'),
+            'find_event_by_id'     : self.Query(Event, 'SELECT ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION FROM EVENTS WHERE ID=:id'),
+            'find_events_at_date'  : self.Query(Event, 'SELECT ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION FROM EVENTS WHERE DATE_FROM <= :date AND DATE_TO >= :date'),
+            'insert_event'         : self.Query(Event, 'INSERT INTO EVENTS (ID, CALENDAR_ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION) VALUES (NULL, :calendar_id, :g_etag, :date_from, :date_to, date_allday, :title, :description, :location)'),
+            'update_event'         : self.Query(Event, 'UPDATE EVENTS SET CALENDAR_ID=:calendar_id, G_ETAG=:g_etag, DATE_FROM=:date_from, DATE_TO=:date_to, DATE_ALLDAY=:date_allday, TITLE=:title, DESCRIPTION=:description, LOCATION WHERE ID=:id'),
+            'delete_event'         : self.Query(Event, 'DELETE FROM EVENTS WHERE ID=:id'),
+            
+            'last_contact_id'      : self.Query(Contact, 'SELECT last_insert_rowid() AS ID FROM CONTACTS'),
+            'insert_contact'       : self.Query(Contact, 'INSERT INTO CONTACTS (ID, FIRSTNAME, LASTNAME, NICKNAME, BIRTHDAY) VALUES (NULL, :firstname, :lastname, :birthday)'),
+            'update_contact'       : self.Query(Contact, 'UPDATE CONTACTS SET FIRSTNAME=:firstname, LASTNAME=:lastname, NICKNAME=:nickname BIRTHDAY=:birthday WHERE ID=:id'),
+            'delete_contact'       : self.Query(Contact, 'DELETE FROM CONTACTS WHERE ID=:id'),
+        }
+        
+    def get_query(self, name):
+        """
+        Get a concrete sqlite query object.
+        
+        @param name: The name of the query.
+        
+        @return A Query instance.
+        """
+        
+        return self.query_list[name]
+    
+    def handle_incoming_change(self, context, source, operation, type, id):
+        """
+        Respond to a data change.
+        
+        @param context: The datastore context.
+        @param source: The backend where the change occured.
+        @param operation: The change mode, can be insert, update or delete.
+        @param type: The data type of the changed object.
+        @param id: The id of the changed object.
+        
+        @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def find_objects(self, context, abstract_query):
+        """
+        Find objects in the primary backend using a query object.
+        
+        @param abstract_query: A query object with search criteria.
+        
+        @return A list with matching objects. The List will be empty if
+        nothing was found.
+        """
+        
+        sql_query = self.get_query(abstract_query.get_name())
+        
+        query_result = sql_query.execute(self.connection, abstract_query.get_parameters())
+        
+        result = []
+        
+        # ----------------------------------------------------------------------
+        # Handle retrieval of Calendar objects
+        # ----------------------------------------------------------------------
+        if sql_query.get_type() == Calendar:
+            for row in query_result:
+                result.append(
+                    Calendar(
+                        id=row['id'],
+                        name=row['name'],
+                        type=row['type']
+                    )
+                )
+        
+        # ----------------------------------------------------------------------
+        # Handle retrieval of Event objects
+        # ----------------------------------------------------------------------
+        if sql_query.get_type() == Event:
+            calendar_fetch = []
+            
+            for row in query_result:
+                if row['date_allday']:
+                    allday = True
+                else:
+                    allday = False
+                
+                if row['calendar_id'] and row['calendar_id'] not in calendar_fetch:
+                    calendar_fetch.append(row['calendar_id']) 
+                
+                result.append(
+                    Event(
+                        id=row['id'],
+                        calendar=row['calendar_id'],
+                        etag=row['g_etag'],
+                        start=row['date_from'],
+                        end=row['date_to'],
+                        allday=allday,
+                        title=row['title'],
+                        description=row['description'],
+                        location=row['location']
+                    )
+                )
+                
+            # resolve relation manually
+            # TODO use some lightweight ORM framework
+            if len(calendar_fetch) > 0:
+                abstract_query = DataStoreQuery('find_calendar_by_ids')
+                abstract_query.ids = ','.join(calendar_fetch)
+                
+                calendars = {}
+                
+                for calendar in self.find_objects(context, abstract_query):
+                    calendars[calendar.id] = calendar
+                    
+                for event in result:
+                    event.calendar = calendars[event.calendar]
+        
+        # ----------------------------------------------------------------------
+        # Handle retrieval of Contact objects
+        # ----------------------------------------------------------------------
+        if sql_query.get_type() == Contact:
+            for row in query_result:
+                result.append(
+                    Contact(
+                        id=row['id'],
+                        firstname=row['firstname'],
+                        lastname=row['lastname'],
+                        nickname=row['nickname'],
+                        birthday=row['birthday']
+                    )
+                )
+        
+        return result
+    
+    def insert_object(self, context, object):
+        """
+        insert a new data object.
+        
+        @param context: The datastore context.
+        @param object: The object to insert.
+        
+        @return The given object with a populated id attribute.
+        """
+        
+        if not isinstance(object, Calendar) and not isinstance(object, Event) and not isinstance(object, Contact):
+            raise ValueError('object type %s is not a calendar object instance'.format(object.__class__.__name__))
+        
+        # ----------------------------------------------------------------------
+        # Handle insertion of Calendar objects
+        # ----------------------------------------------------------------------
+        if isinstance(object, Calendar):
+            object_query = 'insert_calendar'
+            id_query = 'last_calendar_id'
+            
+            object_data = {
+                'name': object.name,
+                'type': object.type
+            }
+            
+        # ----------------------------------------------------------------------
+        # Handle insertion of Event objects
+        # ----------------------------------------------------------------------
+        if isinstance(object, Event):
+            object_query = 'insert_event'
+            id_query = 'last_event_id'
+            
+            # object.calendar can either be a Calendar object or an integer 
+            # with the corresponding calendar database id.
+            if isinstance(object.calendar, Calendar):
+                # When calendar object is not persistent (id is None), 
+                # insert it before insertion of event object.
+                if not object.calendar.id:
+                    self.insert_object(context, object.calendar)
+                
+                calendar_id = object.calendar.id
+                
+            else:
+                calendar_id = object.calendar
+            
+            object_data = {
+                'calendar_id' : calendar_id,
+                'g_etag'      : object.etag,
+                'date_from'   : object.start,
+                'date_to'     : object.end,
+                'date_allday' : object.allday,
+                'title'       : object.title,
+                'description' : object.description,
+                'location'    : object.location
+            }
+            
+        # ----------------------------------------------------------------------
+        # Handle insertion of Contact objects
+        # ----------------------------------------------------------------------
+        if isinstance(object, Contact):
+            object_query = 'insert_contact'
+            id_query = 'last_contact_id'
+            
+            object_data = {
+                'firstname' : object.firstname,
+                'lastname'  : object.lastname,
+                'nickname'  : object.nickname,
+                'birthday'  : object.birthday
+            }
+        
+        with self.connection:
+            self.get_query(object_query).execute(self.connection, object_data)
+        
+        id = self.get_query(id_query).execute(self.connection).fetchone()
+        
+        if id:
+            object.id = id['id']
+            
+        return object
+    
+    def update_object(self, context, object):
+        """
+        Update an existing object.
+        
+        @param context: The datastore context.
+        @param object: The object to update.
+        """
+        
+        if isinstance(object, Calendar):
+            pass
+        
+        if isinstance(object, Event):
+            pass
+        
+        if isinstance(object, Contact):
+            pass
+    
+    def delete_object(self, context, type, id):
+        """
+        Delete an existing object.
+        
+        @param context: The datastore context.
+        @param type: The data type of the object to delete.
+        @param id: The id of the object to delete.
+        """
+        
+        if isinstance(object, Calendar):
+            pass
+        
+        if isinstance(object, Event):
+            pass
+        
+        if isinstance(object, Contact):
+            pass
 
 class GoogleBackend(Backend):
+    """
+    Backend implementation using Google's GData API.
+    """
+    
     pass
 
 class FacebookBackend(Backend):
+    """
+    Backend implementation using the Facebook API.
+    """
+    
     pass
 
 # ------------------------------------------------------------------------------
@@ -308,7 +694,7 @@ class FacebookBackend(Backend):
 # ------------------------------------------------------------------------------
 class CalenderComponentConfig(Config):
     identifier = 'components.calendar'
-        
+    
     def valid_keys(self):
         return [
             'gdata-username',
