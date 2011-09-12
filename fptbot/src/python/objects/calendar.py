@@ -30,54 +30,201 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-class Calendar(object):
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text
+from sqlalchemy.schema import ForeignKey
+from sqlalchemy.orm import relationship, backref
+
+from core.persistence import SqlAlchemyPersistence
+
+#-------------------------------------------------------------------------------
+# Calendar
+#-------------------------------------------------------------------------------
+class Calendar(SqlAlchemyPersistence.Base):
+    """
+    Represent a calendar for the calendar component.
+    """
+    
     AUTO = 1
     MANUAL = 2
     
-    def __init__(self, id=None, name=None, type=None):
-        self.id = id
-        self.name = name
-        self.type = type
-        
-    def __str__(self):
-        return 'Calendar(id=%s,name=%s|type=%s)'.format(self.id, self.name, self.type)
-
-class Event(object):
-    def __init__(self, id=None, calendar=None, etag=None, start=None, end=None, allday=None, title=None, description=None, location=None):
-        self.id = id
-        self.calendar = calendar
-        self.etag = etag
-        self.start = start
-        self.end = end
-        self.allday = allday
-        self.title = title
-        self.description = description
-        self.location = location
-        
-    def __str__(self):
-        return 'Event(id=%s|calendar=%s|etag=%s|start=%s|end=%s|title=%s)'.format(self.id, self.calendar, self.etag, self.start, self.end, self.title)
-
-class Contact(object):
-    def __init__(self, id=None, firstname=None, lastname=None, nickname=None, birthday=None):
-        self.id = id
-        self.firstname = firstname
-        self.lastname = lastname
-        self.nickname = nickname
-        self.birthday = birthday
-        
-    def __str__(self):
-        return 'Contact(id=%s|firstname=%s|lastname=%s|nickname=%s|birthday=%s)'.format(self.id, self.firstname, self.lastname, self.nickname, self.birthday)
-
-class AuditEntry(object):
-    def __init__(self, id=None, datetime=None, principal=None, action=None, datatype=None, databefore=None, dataafter=None):
-        self.id = id
-        self.datetime = datetime
-        self.principal = principal
-        self.action = action
-        self.datatype = datatype
-        self.databefore = databefore
-        self.dataafter = dataafter
-        
-    def __str__(self):
-        return 'AuditEntry(id=%s|datetime=%s|principal=%s|action=%s|datatype=%s)'.format(self.id, self.datetime, self.principal, self.action, self.datatype)
+    __tablename__ = 'calendars'
     
+    # DDL
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255))
+    type = Column(Integer)
+    
+    def __repr__(self):
+        return '<Calendar(id={0},name={1}|type={2})>'.format(
+            self.id, 
+            self.name, 
+            self.type
+        )
+
+class Event(SqlAlchemyPersistence.Base):
+    """
+    Represent an event for the calendar component.
+    """
+    
+    __tablename__ = 'events'
+    
+    # DDL
+    id = Column(Integer, primary_key=True)
+    calendar_id = Column(Integer, ForeignKey('calendars.id'))
+    etag = Column(String(255), nullable=True)
+    start = Column(DateTime)
+    end = Column(DateTime)
+    allday = Column(Boolean, default=False)
+    title = Column(String(255))
+    description = Column(Text, nullable=True)
+    location = Column(String(255), nullable=True)
+    
+    # ORM
+    calendar = relationship('Calendar', backref=backref('events'), order_by=id)
+    
+    def __repr__(self):
+        return '<Event(id={0}|calendar={1}|etag={2}|start={3}|end={4}|title={5})>'.format(
+            self.id, 
+            self.calendar, 
+            self.etag, 
+            self.start, 
+            self.end, 
+            self.title
+        )
+
+class Contact(SqlAlchemyPersistence.Base):
+    """
+    Represent a contact for the calendar component.
+    
+    SQLAlchemy mapped class.
+    """
+    
+    __tablename__ = 'contacts'
+    
+    # DDL
+    id = Column(Integer, primary_key=True)
+    firstname = Column(String(64), nullable=True)
+    lastname = Column(String(64), nullable=True)
+    nickname = Column(String(32))
+    birthday = Column(Date)
+    
+    def __repr__(self):
+        return '<Contact(id={0}|firstname={1}|lastname={2}|nickname={3}|birthday={4})>'.format(
+            self.id, 
+            self.firstname, 
+            self.lastname, 
+            self.nickname, 
+            self.birthday
+        )
+
+#-------------------------------------------------------------------------------
+# Backend mapping
+#-------------------------------------------------------------------------------
+
+class Backend(SqlAlchemyPersistence.Base):
+    """
+    Represents a secondary backend.
+    """
+    
+    __tablename__ = 'backends'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64))
+
+class BackendMapping(SqlAlchemyPersistence.Base):
+    """
+    Represent the mapping between local and remote objects.
+    
+    The class structure is as the following:
+    + BackendMapping
+    +-- CalendarBackendMapping
+    +-- EventBackendMapping
+    +-- ContactBackendMapping
+    """
+    __tablename__ = 'backend_mapping'
+    
+    data_type = Column(String(64), primary_key=True)
+    #local_id = Column(Integer, primary_key=True)
+    backend_id = Column(Integer, ForeignKey('backends.id'), primary_key=True)
+    remote_id = Column(String(255))
+    
+    backend = relationship('Backend')
+    
+    __mapper_args__ = {
+       'polymorphic_on': data_type
+   }
+
+class CalendarBackendMapping(BackendMapping):
+    __mapper_args__ = {
+       'polymorphic_identity': 'calendar'
+    }
+
+    calendar_id = Column(Integer, ForeignKey('calendars.id'))
+    calendar = relationship('Calendar')
+    
+
+class EventBackendMapping(BackendMapping):
+    __mapper_args__ = {
+       'polymorphic_identity': 'event'
+    }
+
+    event_id = Column(Integer, ForeignKey('events.id'))
+    event = relationship('Event')
+
+class ContactBackendMapping(BackendMapping):
+    __mapper_args__ = {
+       'polymorphic_identity': 'contact'
+    }
+
+    contact_id = Column(Integer, ForeignKey('contacts.id'))
+    contact = relationship('Contact')
+
+
+#-------------------------------------------------------------------------------
+# Auditing
+#-------------------------------------------------------------------------------
+
+class AuditEntry(SqlAlchemyPersistence.Base):
+    """
+    Represent an audit entry for the calendar component.
+    
+    SQLAlchemy mapped class.
+    """
+    
+    __tablename__ = 'auditlog'
+
+    id = Column(Integer, primary_key=True)
+    datetime = Column(DateTime)
+    principal = Column(String(128))
+    action = Column(String(32))
+    data_type = Column(String(255))
+    data_before = Column(Text)
+    data_after = Column(Text)
+    
+    __mapper_args__ = {
+       'polymorphic_on': data_type
+   }
+    
+    def __repr__(self):
+        return '<AuditEntry(id={0}|datetime={1}|principal={2}|action={3}|datatype={4})>'.format(
+            self.id, 
+            self.datetime, 
+            self.principal, 
+            self.action, 
+            self.datatype
+        )
+
+class CalendarAuditEntry(AuditEntry):
+    __mapper_args__ = {
+       'polymorphic_identity': 'calendar'
+    }
+
+class EventAuditEntry(AuditEntry):
+    __mapper_args__ = {
+       'polymorphic_identity': 'event'
+    }
+
+class ContactAuditEntry(AuditEntry):
+    __mapper_args__ = {
+       'polymorphic_identity': 'contact'
+    }

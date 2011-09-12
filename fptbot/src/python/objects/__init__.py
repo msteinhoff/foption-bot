@@ -33,4 +33,7 @@ __version__ = '$Rev$'
 __all__ = [
     'principal',
     'calendar',
+    'facts',
+    'irc',
 ]
+

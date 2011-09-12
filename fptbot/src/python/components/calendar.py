@@ -27,15 +27,17 @@ THE SOFTWARE.
 @since Mar 12, 2011
 @author Mario Steinhoff
 """
-
 __version__ = '$Rev$'
 
-import random
 import datetime
 
-from core.config import Config
+import sqlalchemy
+import gdata.calendar.data
+import atom.data
+
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event, Contact
+from objects.calendar import Calendar, Event, Contact, EventBackendMapping,\
+    ContactBackendMapping, CalendarBackendMapping
 
 # ------------------------------------------------------------------------------
 # Exceptions
@@ -50,9 +52,6 @@ class CalendarComponent(Component):
     def __init__(self, bot):
         self.bot = bot
         
-        self.bot.register_config(CalenderComponentConfig)
-        
-        self.config = self.bot.get_config('components.calendar')
         self.logger = self.bot.get_logger('components.calendar')
         
         self.datastore = None
@@ -64,15 +63,14 @@ class CalendarComponent(Component):
         self.datastore = DataStore()
         
         # Setup primary backend
-        persistence = self.bot.get_persistence()
-        sqlite = SqliteBackend(persistence.get_connection())
+        sqlite = SqlAlchemyBackend(self.bot.get_persistence('local'))
         self.datastore.set_primary_backend(sqlite)
         
         # Setup secondary backend
-        google = GoogleBackend()
+        google = GoogleBackend(self.bot.get_persistence('google'))
         self.datastore.register_secondary_backend(google)
         
-    def shutdown(self):
+    def stop(self):
         self.datastore = None
     
     # --------------------------------------------------------------------------
@@ -101,7 +99,7 @@ class CalendarComponent(Component):
         
         return self.datastore.find_objects(query)
     
-    def insert_event(self, event):
+    def insert_object(self, event):
         if event == None:
             return None
         
@@ -110,11 +108,11 @@ class CalendarComponent(Component):
         
         return self.datastore.insert_object(event)
         
-    def update_event(self, event):
+    def update_object(self, event):
         if event == None:
             return None
         
-        if event.id == None:
+        if event.id != None:
             raise ValueError('event.id must be given')
         
         try:
@@ -127,7 +125,9 @@ class CalendarComponent(Component):
             return
         
         try:
-            self.datastore.delete_object(Event, eventId)
+            event = self.find_event_by_id(eventId)
+            
+            self.datastore.delete_object(event)
         except KeyError:
             raise InvalidEventId
 
@@ -141,6 +141,10 @@ class DataStore():
     The data store manages all backend systems and data synchronization
     between the primary and secondary backends.
     """
+    
+    OPERATION_INSERT = 0x01
+    OPERATION_UPDATE = 0x02
+    OPERATION_DELETE = 0x03
     
     def __init__(self):
         self.primary_backend = None
@@ -157,7 +161,7 @@ class DataStore():
         
         self.primary_backend = backend
     
-    def notify_primary_backend(self, source, operation, type, id):
+    def notify_primary_backend(self, source, operation, object):
         """
         Notify the primary backend about a data change.
         
@@ -170,13 +174,12 @@ class DataStore():
         
         @param source: The backend instance that initiated the change.
         @param operation: The change mode, can be insert, update or delete.
-        @param type: The data type of the changed object.
-        @param id: The id of the changed object.
+        @param object: The changed object.
         
         @return Nothing
         """
         
-        self.primary_backend.handle_incoming_change(self, source, operation, type, id)
+        self.primary_backend.handle_incoming_change(self, source, operation, object)
     
     def register_secondary_backend(self, backend):
         """
@@ -189,7 +192,7 @@ class DataStore():
         
         self.secondary_backends.append(backend)
     
-    def notify_secondary_backends(self, source, operation, type, id):
+    def notify_secondary_backends(self, source, operation, object):
         """
         Notify all secondary backends about a data change.
         
@@ -201,8 +204,7 @@ class DataStore():
         
         @param source: The backend instance that initiated the change.
         @param operation: The change mode, can be insert, update or delete.
-        @param type: The data type of the changed object.
-        @param id: The id of the changed object.
+        @param object: The changed object.
         
         @return Nothing
         """
@@ -212,7 +214,7 @@ class DataStore():
             if backend.__class__.__name__ == source:
                 continue
             
-            backend.handle_incoming_change(self, source, operation, type, id)
+            backend.handle_incoming_change(self, source, operation, object)
     
     def get_query(self, name):
         """"
@@ -227,6 +229,18 @@ class DataStore():
         query_object = DataStoreQuery(name)
         
         return query_object
+    
+    def create_mapping(self, object, backend, identity):
+        """
+        Create a mapping between an object in the primary backend and an
+        identity in a given secondary backend.
+        
+        @param object: The object in the primary backend.
+        @param backend: The secondary backend.
+        @param identity: The backend-specific identity.
+        """
+        
+        self.primary_backend.create_mapping(self, object, backend, identity)
     
     def find_objects(self, query_object):
         """
@@ -260,15 +274,14 @@ class DataStore():
         
         return self.primary_backend.update_object(self, object)
     
-    def delete_object(self, type, id):
+    def delete_object(self, object):
         """
         Delete an existing object in the primary backend.
         
-        @param type: The data type of the object to delete.
-        @param id: The id of the object to delete.
+        @param object: The object to delete.
         """
         
-        return self.primary_backend.delete_object(self, type, id)
+        return self.primary_backend.delete_object(self, object)
 
 class DataStoreQuery():
     """
@@ -313,17 +326,29 @@ class Backend():
     A generic backend.
     """
         
-    def handle_incoming_change(self, context, source, operation, type, id):
+    def handle_incoming_change(self, context, source, operation, object):
         """
         Respond to a data change.
         
         @param context: The datastore context.
         @param source: The backend where the change occured.
         @param operation: The change mode, can be insert, update or delete.
-        @param type: The data type of the changed object.
-        @param id: The id of the changed object.
+        @param object: The changed object.
         
         @return Nothing
+        """
+        
+        raise NotImplementedError
+    
+    def create_mapping(self, context, object, backend, identity):
+        """
+        Create a mapping between an object in the primary backend and an
+        identity in a given secondary backend.
+        
+        @param context: The datastore context.
+        @param object: The object in the primary backend.
+        @param backend: The secondary backend.
+        @param identity: The backend-specific identity.
         """
         
         raise NotImplementedError
@@ -363,202 +388,87 @@ class Backend():
         
         raise NotImplementedError
     
-    def delete_object(self, context, type, id):
+    def delete_object(self, context, object):
         """
         Delete an existing object.
         
         @param context: The datastore context.
-        @param type: The data type of the object to delete.
-        @param id: The id of the object to delete.
+        @param object: The object to delete.
         """
         
         raise NotImplementedError
 
-class SqliteBackend(Backend):
+class SqlAlchemyBackend(Backend):
     """
-    Backend implementation using a local sqlite database.
-    
-    TODO: implement object space.
+    Backend implementation using the SQLAlchemy ORM layer.
     """
     
-    class Query():
-        """
-        Implement a simple sqlite query.
-        """
-        
-        def __init__(self, type, query):
-            """
-            Instantiate a new query.
-            
-            @param query: The SQL query that gets executed.
-            """
-            self.type = type
-            self.query = query
-            
-        def get_type(self):
-            """
-            Return the data type of the query result.
-            
-            @return The data type of the query result.
-            """
-            
-            return self.type
-            
-        def execute(self, connection, parameters={}):
-            """
-            Execute the query.
-            
-            @param connection: The sqlite connection to use.
-            @param parameters: A optional list of named parameters.
-            
-            @return 
-            """
-            return connection.execute(self.query, parameters)
-        
     def __init__(self, persistence):
         """
-        Initialize the sqlite backend.
+        Initialize the sqlalchemy backend.
         
         @param persistence: The bot persistence.
         """
         
-        self.connection = persistence.get_connection()
-        
-        self.query_list = {
-            'last_calendar_id'     : self.Query(Calendar, 'SELECT last_insert_rowid() AS ID FROM CALENDARS'),
-            'find_all_calendars'   : self.Query(Calendar, 'SELECT ID, NAME, TYPE FROM CALENDARS'),
-            'find_calendar_by_ids' : self.Query(Calendar, 'SELECT ID, NAME, TYPE FROM CALENDARS WHERE ID IN (:ids)'),
-            'insert_calendar'      : self.Query(Calendar, 'INSERT INTO CALENDARS (ID, NAME, TYPE) VALUES (NULL, :name, :type)'),
-            'update_calendar'      : self.Query(Calendar, 'UPDATE CALENDARS SET NAME=:name, TYPE=:type WHERE ID=:id'),
-            'delete_calendar'      : self.Query(Calendar, 'DELETE FROM CALENDARS WHERE ID=:id'),
-            
-            'last_event_id'        : self.Query(Event, 'SELECT last_insert_rowid() AS ID FROM EVENTS'),
-            'find_event_by_id'     : self.Query(Event, 'SELECT ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION FROM EVENTS WHERE ID=:id'),
-            'find_events_at_date'  : self.Query(Event, 'SELECT ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION FROM EVENTS WHERE DATE_FROM <= :date AND DATE_TO >= :date'),
-            'insert_event'         : self.Query(Event, 'INSERT INTO EVENTS (ID, CALENDAR_ID, G_ETAG, DATE_FROM, DATE_TO, DATE_ALLDAY, TITLE, DESCRIPTION, LOCATION) VALUES (NULL, :calendar_id, :g_etag, :date_from, :date_to, date_allday, :title, :description, :location)'),
-            'update_event'         : self.Query(Event, 'UPDATE EVENTS SET CALENDAR_ID=:calendar_id, G_ETAG=:g_etag, DATE_FROM=:date_from, DATE_TO=:date_to, DATE_ALLDAY=:date_allday, TITLE=:title, DESCRIPTION=:description, LOCATION WHERE ID=:id'),
-            'delete_event'         : self.Query(Event, 'DELETE FROM EVENTS WHERE ID=:id'),
-            
-            'last_contact_id'      : self.Query(Contact, 'SELECT last_insert_rowid() AS ID FROM CONTACTS'),
-            'insert_contact'       : self.Query(Contact, 'INSERT INTO CONTACTS (ID, FIRSTNAME, LASTNAME, NICKNAME, BIRTHDAY) VALUES (NULL, :firstname, :lastname, :birthday)'),
-            'update_contact'       : self.Query(Contact, 'UPDATE CONTACTS SET FIRSTNAME=:firstname, LASTNAME=:lastname, NICKNAME=:nickname BIRTHDAY=:birthday WHERE ID=:id'),
-            'delete_contact'       : self.Query(Contact, 'DELETE FROM CONTACTS WHERE ID=:id'),
-        }
-        
-    def get_query(self, name):
-        """
-        Get a concrete sqlite query object.
-        
-        @param name: The name of the query.
-        
-        @return A Query instance.
-        """
-        
-        return self.query_list[name]
+        self.session = persistence.get_session()
     
-    def handle_incoming_change(self, context, source, operation, type, id):
+    def create_mapping(self, context, object, backend, identity):
         """
-        Respond to a data change.
+        Create a mapping between an object in the primary backend and an
+        identity in a given secondary backend.
         
         @param context: The datastore context.
-        @param source: The backend where the change occured.
-        @param operation: The change mode, can be insert, update or delete.
-        @param type: The data type of the changed object.
-        @param id: The id of the changed object.
-        
-        @return Nothing
+        @param object: The object in the primary backend.
+        @param backend: The secondary backend.
+        @param identity: The backend-specific identity.
         """
         
-        raise NotImplementedError
+        # TODO 
+        pass
     
-    def find_objects(self, context, abstract_query):
+    def find_objects(self, context, query_object):
         """
         Find objects in the primary backend using a query object.
         
-        @param abstract_query: A query object with search criteria.
+        @param context: The datastore context.
+        @param query_object: The query_object with search criteria.
         
         @return A list with matching objects. The List will be empty if
         nothing was found.
         """
         
-        sql_query = self.get_query(abstract_query.get_name())
-        
-        query_result = sql_query.execute(self.connection, abstract_query.get_parameters())
-        
-        result = []
-        
-        # ----------------------------------------------------------------------
-        # Handle retrieval of Calendar objects
-        # ----------------------------------------------------------------------
-        if sql_query.get_type() == Calendar:
-            for row in query_result:
-                result.append(
-                    Calendar(
-                        id=row['id'],
-                        name=row['name'],
-                        type=row['type']
-                    )
-                )
-        
-        # ----------------------------------------------------------------------
-        # Handle retrieval of Event objects
-        # ----------------------------------------------------------------------
-        if sql_query.get_type() == Event:
-            calendar_fetch = []
+        def find_all_calendars():
+            result = self.session.query(Calendar).all()
             
-            for row in query_result:
-                if row['date_allday']:
-                    allday = True
-                else:
-                    allday = False
-                
-                if row['calendar_id'] and row['calendar_id'] not in calendar_fetch:
-                    calendar_fetch.append(row['calendar_id']) 
-                
-                result.append(
-                    Event(
-                        id=row['id'],
-                        calendar=row['calendar_id'],
-                        etag=row['g_etag'],
-                        start=row['date_from'],
-                        end=row['date_to'],
-                        allday=allday,
-                        title=row['title'],
-                        description=row['description'],
-                        location=row['location']
-                    )
-                )
-                
-            # resolve relation manually
-            # TODO use some lightweight ORM framework
-            if len(calendar_fetch) > 0:
-                abstract_query = DataStoreQuery('find_calendar_by_ids')
-                abstract_query.ids = ','.join(calendar_fetch)
-                
-                calendars = {}
-                
-                for calendar in self.find_objects(context, abstract_query):
-                    calendars[calendar.id] = calendar
-                    
-                for event in result:
-                    event.calendar = calendars[event.calendar]
+            return result
         
-        # ----------------------------------------------------------------------
-        # Handle retrieval of Contact objects
-        # ----------------------------------------------------------------------
-        if sql_query.get_type() == Contact:
-            for row in query_result:
-                result.append(
-                    Contact(
-                        id=row['id'],
-                        firstname=row['firstname'],
-                        lastname=row['lastname'],
-                        nickname=row['nickname'],
-                        birthday=row['birthday']
-                    )
-                )
+        def find_event_by_id():
+            result = self.session.query(Event).filter(Event.id == query_object.id).all()
+            
+            return result
+        
+        def find_events_at_date():
+            
+            result = self.session \
+                   .query(Event) \
+                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.start) <= query_object.date) \
+                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.end) >= query_object.date) \
+                   .all()
+            
+            return result
+        
+        dispatcher = {
+           'all_calendars': find_all_calendars,
+           'event_by_id': find_event_by_id,
+           'events_at_date': find_events_at_date
+        }
+        
+        request = query_object.get_name()
+        
+        result = dispatcher[request]()
         
         return result
+        
     
     def insert_object(self, context, object):
         """
@@ -570,74 +480,11 @@ class SqliteBackend(Backend):
         @return The given object with a populated id attribute.
         """
         
-        if not isinstance(object, Calendar) and not isinstance(object, Event) and not isinstance(object, Contact):
-            raise ValueError('object type %s is not a calendar object instance'.format(object.__class__.__name__))
+        self.session.add(object)
+        self.session.commit()
         
-        # ----------------------------------------------------------------------
-        # Handle insertion of Calendar objects
-        # ----------------------------------------------------------------------
-        if isinstance(object, Calendar):
-            object_query = 'insert_calendar'
-            id_query = 'last_calendar_id'
-            
-            object_data = {
-                'name': object.name,
-                'type': object.type
-            }
-            
-        # ----------------------------------------------------------------------
-        # Handle insertion of Event objects
-        # ----------------------------------------------------------------------
-        if isinstance(object, Event):
-            object_query = 'insert_event'
-            id_query = 'last_event_id'
-            
-            # object.calendar can either be a Calendar object or an integer 
-            # with the corresponding calendar database id.
-            if isinstance(object.calendar, Calendar):
-                # When calendar object is not persistent (id is None), 
-                # insert it before insertion of event object.
-                if not object.calendar.id:
-                    self.insert_object(context, object.calendar)
-                
-                calendar_id = object.calendar.id
-                
-            else:
-                calendar_id = object.calendar
-            
-            object_data = {
-                'calendar_id' : calendar_id,
-                'g_etag'      : object.etag,
-                'date_from'   : object.start,
-                'date_to'     : object.end,
-                'date_allday' : object.allday,
-                'title'       : object.title,
-                'description' : object.description,
-                'location'    : object.location
-            }
-            
-        # ----------------------------------------------------------------------
-        # Handle insertion of Contact objects
-        # ----------------------------------------------------------------------
-        if isinstance(object, Contact):
-            object_query = 'insert_contact'
-            id_query = 'last_contact_id'
-            
-            object_data = {
-                'firstname' : object.firstname,
-                'lastname'  : object.lastname,
-                'nickname'  : object.nickname,
-                'birthday'  : object.birthday
-            }
+        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_INSERT, object)
         
-        with self.connection:
-            self.get_query(object_query).execute(self.connection, object_data)
-        
-        id = self.get_query(id_query).execute(self.connection).fetchone()
-        
-        if id:
-            object.id = id['id']
-            
         return object
     
     def update_object(self, context, object):
@@ -648,39 +495,170 @@ class SqliteBackend(Backend):
         @param object: The object to update.
         """
         
-        if isinstance(object, Calendar):
-            pass
+        self.session.commit()
         
-        if isinstance(object, Event):
-            pass
+        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_UPDATE, object)
         
-        if isinstance(object, Contact):
-            pass
+        return object
     
-    def delete_object(self, context, type, id):
+    def delete_object(self, context, object):
         """
         Delete an existing object.
         
         @param context: The datastore context.
-        @param type: The data type of the object to delete.
-        @param id: The id of the object to delete.
+        @param object: The object to delete.
         """
         
-        if isinstance(object, Calendar):
-            pass
+        self.session.delete(object)
         
-        if isinstance(object, Event):
-            pass
+        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_DELETE, object)
         
-        if isinstance(object, Contact):
-            pass
+        return None
 
 class GoogleBackend(Backend):
     """
     Backend implementation using Google's GData API.
     """
     
-    pass
+    date_format_time = '%Y-%m-%dT%H:%M:%S.000Z'
+    date_format_allday = '%Y-%m-%d'
+    
+    def __init__(self, service):
+        """
+        Initialize the backend implementation.
+        
+        @param service: An Google API service object which handles authentication
+        """
+        
+        self.service = service
+    
+    def handle_incoming_change(self, context, source, operation, object):
+        """
+        Respond to a data change.
+        
+        @param context: The datastore context.
+        @param source: The backend where the change occured.
+        @param operation: The change mode, can be insert, update or delete.
+        @param object: The changed object.
+        
+        @return Nothing
+        """
+        
+        if self.__class__.__name__ == source:
+            return
+        
+        dispatcher = { 
+          DataStore.OPERATION_INSERT : self.insert_object,
+          DataStore.OPERATION_UPDATE : self.update_object,
+          DataStore.OPERATION_DELETE : self.delete_object
+        }
+        
+        result = dispatcher[operation](context, object)
+        
+        return result
+    
+    def find_objects(self, context, query_object):
+        """
+        Find objects in the primary backend using a query object.
+        
+        @param context: The datastore context.
+        @param query_object: The query_object with search criteria.
+        
+        @return A list with matching objects. The List will be empty if
+        nothing was found.
+        """
+        
+        raise NotImplementedError
+    
+    def insert_object(self, context, object):
+        """
+        insert a new data object.
+        
+        @param context: The datastore context.
+        @param object: The object to insert.
+        
+        @return The given object with a populated id attribute.
+        """
+        
+        def hastime(object):
+            return (object.hour != 0 or object.minute != 0 or object.second != 0)
+        
+        def event():
+            entry = gdata.calendar.data.CalendarEventEntry()
+            
+            entry.title = atom.data.Title(text=object.title)
+                
+            if object.description:
+                entry.content = atom.data.Content(text=object.description)
+                
+            if object.location:
+                entry.where.append(gdata.calendar.data.CalendarWhere(value=object.location))
+            
+            if hastime(object.start) and hastime(object.end):
+                date_format = self.date_format_time
+            elif not hastime(object.start) and not hastime(object.end):
+                date_format = self.date_format_allday
+            else:
+                raise ValueError('start/end date: mixing of datetime and date is not allowed. start=%s, end=%s'.format(object.start, object.end))
+            
+            start = object.start
+            
+            # Google API workaround
+            # when creating an event with start = x and end = y, 
+            # the created event ends at y-1
+            if object.start == object.end:
+                end = object.end
+            else:
+                delta = datetime.timedelta(1)
+                end = object.end + delta
+            
+            start_time = start.strftime(date_format)
+            end_time = end.strftime(date_format)
+            
+            entry.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+        
+            """ TODO catch error """
+            new_entry = self.service.calendar_client.InsertEvent(entry)
+            
+            new_entry.id.text
+            
+            
+            
+
+        
+        def contact():
+            pass
+        
+        dispatcher = {
+            Event : event,
+            Contact : contact
+        }
+        
+        dispatcher[object.__class__]()
+
+    
+    def update_object(self, context, object):
+        """
+        Update an existing object.
+        
+        @param context: The datastore context.
+        @param object: The object to update.
+        """
+        
+        print "update object"
+        print object
+    
+    def delete_object(self, context, object):
+        """
+        Delete an existing object.
+        
+        @param context: The datastore context.
+        @param object: The object to delete.
+        """
+        
+        print "delete object"
+        print object
+    
 
 class FacebookBackend(Backend):
     """
@@ -689,22 +667,3 @@ class FacebookBackend(Backend):
     
     pass
 
-# ------------------------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------------------------
-class CalenderComponentConfig(Config):
-    identifier = 'components.calendar'
-    
-    def valid_keys(self):
-        return [
-            'gdata-username',
-            'gdata-password'
-            'gdata-token',
-        ]
-    
-    def default_values(self):
-        return {
-            'gdata-username' : '',
-            'gdata-password' : '',
-            'gdata-token'    : ''
-        }

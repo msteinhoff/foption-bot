@@ -30,18 +30,40 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-class Principal(object):
-    def __init__(self, login=None, password=None, role=None):
-        self.login = login
-        self.password = password
-        self.role = role
+from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.schema import ForeignKey
+from sqlalchemy.orm import relationship, backref
 
+from core.persistence import SqlAlchemyPersistence
 
-class Right(object):
-    def __init__(self, name=None, mask=None):
-        self.name = name
-        self.mask = mask
+class Principal(SqlAlchemyPersistence.Base):
+    """
+    Represent a principal for the principal component.
+    
+    SQLAlchemy mapped class.
+    """
+    
+    __tablename__ = 'principals'
+    
+    id = Column(Integer, primary_key=True)
+    login = Column(String(32))
+    password = Column(String(255))
+    role = Column(Integer)
+    disabled = Column(Boolean)
 
+class Nickname(SqlAlchemyPersistence.Base):
+    """
+    Represent a IRC nickname associated with a principal.
+    
+    SQLAlchemy mapped class.
+    """
+    
+    __tablename__ = 'nicknames'
+    
+    nickname = Column(String(32), primary_key=True)
+    principal_id = Column(Integer, ForeignKey('principals.id'), nullable=True)
+    
+    principal = relationship(Principal, backref=backref('nicknames', order_by=nickname))
 
 class Role(object):
     """
@@ -51,7 +73,7 @@ class Role(object):
     Right.AUTHED = 2
     Right.ADMIN  = 4
     
-    TODO: need real object here or maybe move to own python module?
+    TODO: rework role/rights concept.
     """
     
     USER   = 1 # Right.USER
@@ -77,3 +99,12 @@ class Role(object):
         """
         
         return (required & role == required) 
+
+class Right(object):
+    """
+    Represents an individual right. (read, write, delete, etc)
+    """
+    def __init__(self, name=None, mask=None):
+        self.name = name
+        self.mask = mask
+

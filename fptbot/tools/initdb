@@ -32,7 +32,7 @@ BASE="$PWD/.."
 PYTHONPATH="$PYTHONPATH:$BASE/src/python"
 
 PYTHON_BINARY="python"
-PYTHON_SCRIPT="$BASE/src/python/tools/config.py"
+PYTHON_SCRIPT="$BASE/src/python/tools/initdb.py"
 PYTHON_ARGS="$@"
 
 export PYTHONPATH

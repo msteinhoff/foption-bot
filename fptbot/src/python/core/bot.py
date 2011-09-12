@@ -35,7 +35,7 @@ import multiprocessing
 
 from core.timer import timer_map
 from core.config import Config
-from core.persistence import Persistence
+from core.persistence import SqlAlchemyPersistence, GoogleApiService
 from interaction.interaction import Interaction
 
 # ------------------------------------------------------------------------------
@@ -65,23 +65,22 @@ class Bot(object):
         self.logger = self.get_logger()
         
         self._config = {}
-        self.register_config(BotConfig)
-        
-        self._persistence = Persistence(self.get_config('core.bot').get('database-file'))
-        self.register_persistence()
-        
+        self._timer = {}
+        self._persistence = {}
         self._components = {}
+        self._interaction = {}
+        self._processes = {}
+        
+        self.register_config(BotConfig)
+        self.apply_logger_config()
+        
+        self.register_persistence('local', SqlAlchemyPersistence(self.get_config('core.bot').get('database-connectstring')))
+        self.register_persistence('google', GoogleApiService(self))
         self.register_component('principal', 'components.principal.PrincipalComponent')
         self.register_component('calendar', 'components.calendar.CalendarComponent')
         self.register_component('facts', 'components.facts.FactsComponent')
-        
-        self._interaction = {}
         self.register_interaction('irc', 'interaction.irc.client.Client')
         
-        self._timer = {}
-        
-        self._processes = {}
-    
     def get_object( self, name ):
         """
         Returns a reference to the given object.
@@ -121,15 +120,21 @@ class Bot(object):
             
         return logging.getLogger(identifier)
     
+    def apply_logger_config(self):
+        pass
+    
     #---------------------------------------------------------------------------
     # persistence
     #---------------------------------------------------------------------------
-    def get_persistence(self):
+    def register_persistence(self, identifier, instance):
+        self._persistence[identifier] = instance
+    
+    def get_persistence(self, identifier='local'):
         """
         Return the persistence instance.
         """
         
-        return self._persistence
+        return self._persistence[identifier]
     
     #---------------------------------------------------------------------------
     # configuration
@@ -142,7 +147,7 @@ class Bot(object):
         if clazz.identifier in self._config:
             raise ConfigRegisteredError
         
-        self._config[clazz.identifier] = clazz()
+        self._config[clazz.identifier] = clazz(self)
         
     def get_config(self, identifier):
         """
@@ -223,6 +228,8 @@ class Bot(object):
         and call their start() method.
         """
         
+        self.get_persistence().open()
+        
         for name, component in self._components.items():
             self.logger.info('starting component %s', name)
             component.start()
@@ -250,6 +257,8 @@ class Bot(object):
         for name, component in self._components.items():
             self.logger.info('stopping component %s', name)
             component.stop()
+            
+        self.get_persistence().close()
 
 
 class BotConfig(Config):
@@ -257,13 +266,14 @@ class BotConfig(Config):
         
     def valid_keys(self):
         return [
-            'configuration-directory',
             'logging-directory',
-            'database-file'
+            'database-file',
+            'database-connectstring',
         ]
     
     def default_values(self):
         return {
             'logging-directory'      : '',
-            'database-file'          : ''
+            'database-file'          : '',
+            'database-connectstring' : ''
         }

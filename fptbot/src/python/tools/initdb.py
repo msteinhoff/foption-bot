@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: UTF-8 -*-
 """
 $Id$
@@ -24,29 +25,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since May 6, 2011
+@since Aug 15, 2011
 @author Mario Steinhoff
 """
 
 __version__ = '$Rev$'
 
-__all__ = [
-    'Fact'
-]
-
-from sqlalchemy import Column, Integer, Date, Text
-
+from core.bot import Bot
 from core.persistence import SqlAlchemyPersistence
 
-class Fact(SqlAlchemyPersistence.Base):
-    """
-    Represent an individual fact for the fact component.
+# Load all table definitions
+from objects import *
+
+if __name__ == '__main__':
+    bot = Bot()
     
-    SQLAlchemy mapped class.
-    """
+    persistence = bot.get_persistence()
     
-    __tablename__ = 'facts'
-    
-    id = Column(Integer, primary_key=True)
-    date = Column(Date)
-    text = Column(Text)
+    base = SqlAlchemyPersistence.Base
+    base.metadata.create_all(persistence.engine)

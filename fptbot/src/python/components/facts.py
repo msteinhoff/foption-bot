@@ -60,7 +60,7 @@ class FactsComponent(Component):
         self.bot.register_timer(
             'components.facts.update',
             'daily',
-            self.config.get('dbUpdateInterval'),
+            self.config.get('retrievalInterval'),
             self.update_data
         )
     
@@ -71,7 +71,7 @@ class FactsComponent(Component):
         self.bot.get_timer('components.facts.update').start()
         
            
-    def shutdown(self):
+    def stop(self):
         self.bot.get_timer('components.facts.update').stop()
     
     # --------------------------------------------------------------------------
