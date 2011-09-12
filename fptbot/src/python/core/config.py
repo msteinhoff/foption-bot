@@ -48,16 +48,19 @@ class Config(object):
     TODO: Implement dict-style access for key/value-pairs.
     """
     
-    def __init__(self):
+    def __init__(self, bot):
         """
         Initialize the configuration.
         
         @param bot: The bot instance.
         """
         
+        self.bot = bot
+        self.logger = self.bot.get_logger('core.config')
+        
         self.init(self.default_values())
         self.load()
-        
+    
     def filter_valid_keys(self, dict):
         """
         Validate a configuration dictionary against the config structure.
@@ -85,7 +88,7 @@ class Config(object):
         Return a list representing valid configuration keys.
         """
         
-        raise NotImplementedError
+        raise ValueError('no valid keys defined')
     
     def default_values(self):
         """
@@ -93,7 +96,7 @@ class Config(object):
         is validated against the list returned by valid().
         """
         
-        raise NotImplementedError
+        raise ValueError('no default values defined')
     
     def set(self, key, value):
         """
@@ -104,7 +107,7 @@ class Config(object):
         """
         
         if key not in self.valid_keys():
-            raise ValueError('invalid key')
+            raise ValueError('invalid key: %s'.format(key))
         
         self._keys[key] = value
         
@@ -123,7 +126,7 @@ class Config(object):
         """
         
         return self._keys
-        
+    
     def delete(self, name):
         """
         Remove a configuration value.
@@ -132,7 +135,7 @@ class Config(object):
         """
         
         del self._keys[name]
-        
+    
     def init(self, data={}):
         """
         Initialize configuration dictionary with default values.
@@ -141,7 +144,7 @@ class Config(object):
         """
         
         self._keys = self.filter_valid_keys(data)
-
+    
     def load(self):
         """
         Load configuration data from persistence.
@@ -152,9 +155,14 @@ class Config(object):
         
         filename = os.path.join(DIR_CONFIG, self.identifier)
         
-        loaded = self.filter_valid_keys(self.readobject(filename))
-    
-        self._keys.update(loaded)
+        try:
+            rawdata = self.readobject(filename)
+            loaded = self.filter_valid_keys(rawdata)
+            
+            self._keys.update(loaded)
+            
+        except IOError as e:
+            self.logger.error('could not load %s configuration: %s', self.identifier, e)
     
     def save(self):
         """
@@ -163,8 +171,12 @@ class Config(object):
         
         filename = os.path.join(DIR_CONFIG, self.identifier)
             
-        self.writeobject(filename, self._keys)
-
+        try:
+            self.writeobject(filename, self._keys)
+            
+        except IOError as e:
+            self.logger.error('could not save %s configuration: %s', self.identifier, e)
+    
     def readobject(self, filename):
         """
         Restore a python object from a file.

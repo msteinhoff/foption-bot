@@ -73,17 +73,28 @@ class Calendar(InteractiveModule):
     def initialize(self):
         bot = self.client.bot;
         
-        bot.register_config(CalenderConfig)
+        bot.register_config(CalendarConfig)
         
         self.logger = bot.get_logger('interaction.irc.calendar')
         self.config = bot.get_config('interaction.irc.calendar')
         self.component = bot.get_component('calendar');
+        
+        bot.register_timer(
+            'interaction.irc.calendar.reminder',
+            'daily',
+            self.config.get('reminderInterval'),
+            self._display_reminder
+        )
     
+    # --------------------------------------------------------------------------
+    # Lifecycle
+    # --------------------------------------------------------------------------
     def start(self):
-        self.start_daily_timer(self.config.get('reminderInterval'), self._display_reminder)
+        self.client.bot.get_timer('interaction.irc.calendar.reminder').start()
+        
     
     def stop(self):
-        self.cancel_timer()
+        self.client.bot.get_timer('interaction.irc.calendar.reminder').stop()
     
     #---------------------------------------------------------------------------
     # InteractiveModule implementation
@@ -304,7 +315,7 @@ class Calendar(InteractiveModule):
                 dateTo = self._get_date(dates[1])
             
             event = Event(start=dateFrom, end=dateTo, title=title)
-            event = self.component.insert_event(event)
+            event = self.component.insert_object(event)
             
             reply.add_line("Eintrag erfolgreich eingefügt! ID: {0}".format(event.id))
             
@@ -435,7 +446,7 @@ class Calendar(InteractiveModule):
         return InteractiveModuleReply().add_line("not implemented")
 
 
-class CalenderConfig(Config):
+class CalendarConfig(Config):
     identifier = 'interaction.irc.calendar'
         
     def valid_keys(self):

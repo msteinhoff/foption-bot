@@ -46,14 +46,18 @@ class Auth(Command):
     AUTH command is used to authenticate user with Quakenet Q9 service.
     """
     
-    @staticmethod
-    def token():
-        return 'AUTH'
+    token = 'AUTH'
     
-    def _send(self, username, password):
-        self._client.send_irc(Event(None, self.token(), [username, password]))
+    class Sender(Command.Sender):
+        def _send(self):
+            """
+            Authenticate with Quakenet Q9 service.
+            """
+            
+            self.check_attr('username')
+            self.check_attr('password')
+            
+            return self.create_event(Auth, [self.username, self.password])
 
 class WhoisAuthReply(Command):
-    @staticmethod
-    def token():
-        return '330'
+    token = '330'

@@ -60,6 +60,7 @@ class DailyTimer(BaseTimer):
         self.timer.start()
     
     def stop(self):
+        # TODO check if timer was started
         self.timer.stop()
     
     def _check(self, start):

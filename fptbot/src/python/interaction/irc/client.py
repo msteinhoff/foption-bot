@@ -117,7 +117,7 @@ class Client(Interaction, asynchat.async_chat):
         name = command.__name__
         token = command.token
         
-        self.logger.info('registering command %s (IRC command: %s)', name, token)
+        self.logger.info('registering command handler: (Name=%s,IRCToken=%s)', name, token)
         
         instance = command(self)
         receiver = instance.get_receiver()
@@ -188,7 +188,7 @@ class Client(Interaction, asynchat.async_chat):
         self._modules[name] = instance
         
         for command_name, listener in instance.get_receive_listeners().items():
-            self.logger.debug('%s: registering receive listener for %s', name, command_name)
+            self.logger.info('registering receive listener: (Module=%s,Listener=%s)', name, command_name)
             self._recvname[command_name].add_listener(listener)
         
         self.logger.info('loading module %s done', name)
@@ -224,8 +224,11 @@ class Client(Interaction, asynchat.async_chat):
             self.logger.info('starting modules')
             
             for module_name, module in self._modules.items():
-                self.logger.info('starting module %s', module_name)
-                module.start()
+                try:
+                    self.logger.info('starting module %s', module_name)
+                    module.start()
+                except Exception as msg:
+                    self.logger.error('starting module %s failed: %s', module_name, msg)
                 
             self.logger.info('starting modules done')
             
@@ -238,10 +241,10 @@ class Client(Interaction, asynchat.async_chat):
             
             asyncore.loop()
             
-        except:
+        except Exception as msg:
             #TODO: check which exceptions are caught here
             #TODO  print errors
-            self.logger.error('starting client failed')
+            self.logger.error('starting client failed: %s', msg)
 
     def stop(self):
         """
@@ -380,8 +383,11 @@ class Client(Interaction, asynchat.async_chat):
         self.post_disconnect()
         
         for module_name, module in self._modules.items():
-            self.logger.info('stopping module %s', module_name)
-            module.stop()
+            try:
+                self.logger.info('stopping module %s', module_name)
+                module.stop()
+            except Exception as msg:
+                self.logger.error('stopping module %s failed: %s', module_name, msg)
 
     #---------------------------------------------------------------------------
     # asynchat implementation
