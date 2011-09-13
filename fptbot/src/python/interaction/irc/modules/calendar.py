@@ -136,12 +136,12 @@ class Calendar(InteractiveModule):
                  keyword='addevent',
                  callback=self.insert_event,
                  pattern=r'^(\d{1,2}\.\d{1,2}\.\d{4}|\d{1,2}\.\d{1,2}\.\d{4}-\d{1,2}\.\d{1,2}\.\d{4})\s(.+)$',
-                 syntaxhint='<datumvon>[-datumbis] <beschreibung>'
+                 syntaxhint='<datumvon>[-datumbis] <titel>'
             ),
             InteractiveModuleCommand(
                  keyword='editevent',
                  callback=self.change_event,
-                 pattern=r'^[\d]+\s(.+)\s(.+)$',
+                 pattern=r'^([\d]+)\s(.+?)\s(.+)$',
                  syntaxhint='<id> <start|ende|titel|beschreibung|ort> <wert>'
             ),
             InteractiveModuleCommand(
@@ -329,9 +329,37 @@ class Calendar(InteractiveModule):
     
     def change_event(self, event, location, command, parameter):
         """
+        Change an existing event.
+        The event is identified by its ID.
+        
+        Syntax: <id> <start|ende|titel|beschreibung|ort> <wert>
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
+        reply = InteractiveModuleReply()
+        
+        eventId = parameter[0]
+        attribute = parameter[1]
+        value = parameter[2]
+        
+        try:
+            event = self.component.find_event_by_id(eventId)
+            
+            map = {
+                'start' : 'start',
+                'ende' : 'end',
+                'titel' : 'title',
+                'beschreibung' : 'description',
+                'ort' : 'location'
+            }
+            
+            setattr(event, map[attribute], value)
+            
+            self.component.update_object(event)
+            
+        except EventNotFound:
+            reply.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
+        
+        return reply
     
     def delete_event(self, event, location, command, parameter):
         """
@@ -391,7 +419,19 @@ class Calendar(InteractiveModule):
         .searchevent <text>
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
+        reply = InteractiveModuleReply()
+        
+        query = parameter[0]
+        
+        try:
+            events = self.component.find_events_by_substring(query)
+            
+            [reply.add_line("(ID={0}) {1}".format(event.id, event.title)) for event in events]
+            
+        except NoEventsFound:
+            reply.add_line("Keine Einträge mit diesem Inhalt gefunden.")
+
+        return reply
     
     def topic_event(self, event, location, command, parameter):
         """
