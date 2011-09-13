@@ -51,6 +51,9 @@ class Calendar(SqlAlchemyPersistence.Base):
     
     # DDL
     id = Column(Integer, primary_key=True)
+    isDeleted = Column(Boolean, default=False)
+    deletedOn = Column(DateTime, nullable=True)
+    
     name = Column(String(255))
     type = Column(Integer)
     
@@ -70,6 +73,9 @@ class Event(SqlAlchemyPersistence.Base):
     
     # DDL
     id = Column(Integer, primary_key=True)
+    isDeleted = Column(Boolean, default=False)
+    deletedOn = Column(DateTime, nullable=True)
+    
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
     etag = Column(String(255), nullable=True)
     start = Column(DateTime)
@@ -103,6 +109,9 @@ class Contact(SqlAlchemyPersistence.Base):
     
     # DDL
     id = Column(Integer, primary_key=True)
+    isDeleted = Column(Boolean, default=False)
+    deletedOn = Column(DateTime, nullable=True)
+
     firstname = Column(String(64), nullable=True)
     lastname = Column(String(64), nullable=True)
     nickname = Column(String(32))

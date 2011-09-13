@@ -30,14 +30,16 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import datetime
+import logging
 
 import sqlalchemy
+import sqlalchemy.orm.exc
 import gdata.calendar.data
 import atom.data
 
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event, Contact, EventBackendMapping,\
-    ContactBackendMapping, CalendarBackendMapping
+from objects.calendar import Calendar, Event, Contact, Backend, EventBackendMapping,\
+    ContactBackendMapping, CalendarBackendMapping, BackendMapping
 
 # ------------------------------------------------------------------------------
 # Exceptions
@@ -106,17 +108,17 @@ class CalendarComponent(Component):
         if event.id != None:
             raise ValueError('event.id must be None')
         
-        return self.datastore.insert_object(event)
+        return self.datastore.insert_object('CalendarComponent', event)
         
     def update_object(self, event):
         if event == None:
             return None
         
-        if event.id != None:
+        if event.id == None:
             raise ValueError('event.id must be given')
         
         try:
-            return self.datastore.update_object(event)
+            return self.datastore.update_object('CalendarComponent', event)
         except KeyError:
             raise InvalidEventId
         
@@ -127,7 +129,7 @@ class CalendarComponent(Component):
         try:
             event = self.find_event_by_id(eventId)
             
-            self.datastore.delete_object(event)
+            self.datastore.delete_object('CalendarComponent', event)
         except KeyError:
             raise InvalidEventId
 
@@ -142,13 +144,14 @@ class DataStore():
     between the primary and secondary backends.
     """
     
-    OPERATION_INSERT = 0x01
-    OPERATION_UPDATE = 0x02
-    OPERATION_DELETE = 0x03
-    
     def __init__(self):
+        """
+        Initialize the datastore.
+        """
+        
         self.primary_backend = None
         self.secondary_backends = []
+        self.strategy = DataStoreOneWaySync(self)
     
     def set_primary_backend(self, backend):
         """
@@ -161,26 +164,6 @@ class DataStore():
         
         self.primary_backend = backend
     
-    def notify_primary_backend(self, source, operation, object):
-        """
-        Notify the primary backend about a data change.
-        
-        When a change at one of the the secondary backends occurs, the
-        primay backend is notified about the change.  It will first update
-        itself with the changed data and then propagate the changed data to
-        all other secondary backends except the initiating one.
-        
-        A change can be a insert, update or delete operation.
-        
-        @param source: The backend instance that initiated the change.
-        @param operation: The change mode, can be insert, update or delete.
-        @param object: The changed object.
-        
-        @return Nothing
-        """
-        
-        self.primary_backend.handle_incoming_change(self, source, operation, object)
-    
     def register_secondary_backend(self, backend):
         """
         Register a backend object as a secondary backend.
@@ -191,30 +174,6 @@ class DataStore():
         """
         
         self.secondary_backends.append(backend)
-    
-    def notify_secondary_backends(self, source, operation, object):
-        """
-        Notify all secondary backends about a data change.
-        
-        When a change at the primary backend occurs, the secondary backends
-        are notified about the change. They can either ignore the change
-        or fetch the changed object using the provided data type and id.
-        
-        A change can be a insert, update or delete operation.
-        
-        @param source: The backend instance that initiated the change.
-        @param operation: The change mode, can be insert, update or delete.
-        @param object: The changed object.
-        
-        @return Nothing
-        """
-        
-        for backend in self.secondary_backends:
-            # ignore source
-            if backend.__class__.__name__ == source:
-                continue
-            
-            backend.handle_incoming_change(self, source, operation, object)
     
     def get_query(self, name):
         """"
@@ -230,31 +189,19 @@ class DataStore():
         
         return query_object
     
-    def create_mapping(self, object, backend, identity):
-        """
-        Create a mapping between an object in the primary backend and an
-        identity in a given secondary backend.
-        
-        @param object: The object in the primary backend.
-        @param backend: The secondary backend.
-        @param identity: The backend-specific identity.
-        """
-        
-        self.primary_backend.create_mapping(self, object, backend, identity)
-    
-    def find_objects(self, query_object):
+    def find_objects(self, query):
         """
         Find objects in the primary backend using a query object.
         
-        @param query_object: The query_object with search criteria.
+        @param query: A DataStoreQuery instance with search criteria.
         
         @return A list with matching objects. The List will be empty if
         nothing was found.
         """
         
-        return self.primary_backend.find_objects(self, query_object)
+        return self.primary_backend.find_objects(self, query)
     
-    def insert_object(self, object):
+    def insert_object(self, source, object):
         """
         insert a new object in the primary backend.
         
@@ -263,27 +210,106 @@ class DataStore():
         @return The given object with a populated id attribute.
         """
         
-        return self.primary_backend.insert_object(self, object)
+        return self.strategy.insert(source, object)
     
-    def update_object(self, object):
+    def update_object(self, source, object):
         """
         Update an existing object in the primary backend.
         
         @param object: The object to update.
         """
         
-        return self.primary_backend.update_object(self, object)
+        return self.strategy.update(source, object)
     
-    def delete_object(self, object):
+    def delete_object(self, source, object):
         """
         Delete an existing object in the primary backend.
         
         @param object: The object to delete.
         """
         
-        return self.primary_backend.delete_object(self, object)
+        return self.strategy.delete(source, object)
 
-class DataStoreQuery():
+class DataStoreSyncStrategy(object):
+    """
+    Abstract implementation for backend all synchronization strategies.
+    """
+    
+    def __init__(self, datastore):
+        """
+        Initialize the strategy.
+        """
+        self.datastore = datastore
+        
+    def insert(self, source, object):
+        """
+        Handle insert algorithm.
+        
+        @param source: Where the object comes from.
+        @param object: The object to be inserted.
+        """
+        raise NotImplementedError
+    
+    def update(self, source, object):
+        """
+        Handle update algorithm.
+        
+        @param source: Where the object comes from.
+        @param object: The object to be updated.
+        """
+        raise NotImplementedError
+    
+    def delete(self, source, object):
+        """
+        Handle delete algorithm.
+        
+        @param source: Where the object comes frome.
+        @param object: The object to be deleted.
+        """
+        raise NotImplementedError
+
+class DataStoreOneWaySync(DataStoreSyncStrategy):
+    def insert(self, source, object):
+        context = self.datastore
+        primary = context.primary_backend
+        secondaries = context.secondary_backends
+        
+        storedObject = primary.insert_object(context, object)
+        
+        for secondary in secondaries:
+            identity = secondary.insert_object(context, object)
+            
+            primary.create_mapping(context, storedObject, identity)
+            
+        return storedObject
+        
+    def update(self, source, object):
+        context = self.datastore
+        primary = context.primary_backend
+        secondaries = context.secondary_backends
+        
+        primary.update_object(context, object)
+        
+        mapping = {}
+        
+        for map in primary.get_mapping(context, object):
+            mapping[map.backend.name] = DataStorePeerIdentity(identity=map.remote_id)
+        
+        for secondary in secondaries:
+            identity = secondary.update_object(context, object, mapping[secondary.__class__.__name__])
+            
+    def delete(self, source, object):
+        pass
+
+class DataStoreTwoWaySync(DataStoreSyncStrategy):
+    def insert(self, source, object):
+        return object
+    def update(self, source, object):
+        pass
+    def delete(self, source, object):
+        pass
+
+class DataStoreQuery(object):
     """
     An abstract data store query.
     
@@ -321,84 +347,42 @@ class DataStoreQuery():
         # TODO filter private attributes
         return self.__dict__
 
-class Backend():
+class DataStoreChangeRequest(object):
     """
-    A generic backend.
+    A backend-agnostic change request within the datastore.
     """
-        
-    def handle_incoming_change(self, context, source, operation, object):
-        """
-        Respond to a data change.
-        
-        @param context: The datastore context.
-        @param source: The backend where the change occured.
-        @param operation: The change mode, can be insert, update or delete.
-        @param object: The changed object.
-        
-        @return Nothing
-        """
-        
-        raise NotImplementedError
     
-    def create_mapping(self, context, object, backend, identity):
-        """
-        Create a mapping between an object in the primary backend and an
-        identity in a given secondary backend.
-        
-        @param context: The datastore context.
-        @param object: The object in the primary backend.
-        @param backend: The secondary backend.
-        @param identity: The backend-specific identity.
-        """
-        
-        raise NotImplementedError
+    OPERATION_INSERT = 0x01
+    OPERATION_UPDATE = 0x02
+    OPERATION_DELETE = 0x03
     
-    def find_objects(self, context, query_object):
+    def __init__(self, source=None, operation=None, object=None):
         """
-        Find objects in the primary backend using a query object.
-        
-        @param context: The datastore context.
-        @param query_object: The query_object with search criteria.
-        
-        @return A list with matching objects. The List will be empty if
-        nothing was found.
+        @param source: The source of the change.
+        @param operation: The operation on the given object.
+        @param object: The new data object.
         """
         
-        raise NotImplementedError
-    
-    def insert_object(self, context, object):
-        """
-        insert a new data object.
-        
-        @param context: The datastore context.
-        @param object: The object to insert.
-        
-        @return The given object with a populated id attribute.
-        """
-        
-        raise NotImplementedError
-    
-    def update_object(self, context, object):
-        """
-        Update an existing object.
-        
-        @param context: The datastore context.
-        @param object: The object to update.
-        """
-        
-        raise NotImplementedError
-    
-    def delete_object(self, context, object):
-        """
-        Delete an existing object.
-        
-        @param context: The datastore context.
-        @param object: The object to delete.
-        """
-        
-        raise NotImplementedError
+        self.source = source
+        self.operation = operation
+        self.object = object
 
-class SqlAlchemyBackend(Backend):
+class DataStorePeerIdentity(object):
+    """
+    A backend-specific identity for a given entity.
+    """
+    
+    def __init__(self, backend=None, type=None, identity=None):
+        """
+        @param backend: The classname of the backend.
+        @param type: The classname of the entity type.
+        @param identity: The entity identity.
+        """
+        self.backend = backend
+        self.type = type
+        self.identity = identity
+
+class SqlAlchemyBackend(object):
     """
     Backend implementation using the SQLAlchemy ORM layer.
     """
@@ -412,21 +396,7 @@ class SqlAlchemyBackend(Backend):
         
         self.session = persistence.get_session()
     
-    def create_mapping(self, context, object, backend, identity):
-        """
-        Create a mapping between an object in the primary backend and an
-        identity in a given secondary backend.
-        
-        @param context: The datastore context.
-        @param object: The object in the primary backend.
-        @param backend: The secondary backend.
-        @param identity: The backend-specific identity.
-        """
-        
-        # TODO 
-        pass
-    
-    def find_objects(self, context, query_object):
+    def find_objects(self, context, query):
         """
         Find objects in the primary backend using a query object.
         
@@ -443,7 +413,7 @@ class SqlAlchemyBackend(Backend):
             return result
         
         def find_event_by_id():
-            result = self.session.query(Event).filter(Event.id == query_object.id).all()
+            result = self.session.query(Event).filter(Event.id == query.id).one()
             
             return result
         
@@ -451,8 +421,8 @@ class SqlAlchemyBackend(Backend):
             
             result = self.session \
                    .query(Event) \
-                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.start) <= query_object.date) \
-                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.end) >= query_object.date) \
+                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.start) <= query.date) \
+                   .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.end) >= query.date) \
                    .all()
             
             return result
@@ -463,7 +433,7 @@ class SqlAlchemyBackend(Backend):
            'events_at_date': find_events_at_date
         }
         
-        request = query_object.get_name()
+        request = query.get_name()
         
         result = dispatcher[request]()
         
@@ -483,9 +453,81 @@ class SqlAlchemyBackend(Backend):
         self.session.add(object)
         self.session.commit()
         
-        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_INSERT, object)
-        
         return object
+    
+    def create_mapping(self, context, object, identity):
+        """
+        Create a mapping between a local object and an remote peer identity.
+        
+        @param context: The datastore context.
+        @param object: The local object.
+        @param identity: The remote peer identity.
+        """
+        
+        try:
+            backend = self.session \
+                    .query(Backend) \
+                    .filter(Backend.name == identity.backend) \
+                    .one()
+                    
+        except sqlalchemy.orm.exc.NoResultFound:
+            backend = Backend(name=identity.backend)
+            
+            self.session.add(backend)
+            self.session.commit()
+        
+        def calendar():
+            mapping = CalendarBackendMapping()
+            mapping.calendar = object
+            
+            return mapping
+        
+        def event():
+            mapping = EventBackendMapping()
+            mapping.event = object
+            
+            return mapping
+        
+        def contact():
+            mapping = ContactBackendMapping()
+            mapping.contact = object
+            
+            return mapping
+        
+        dispatcher = {
+            'Calendar': calendar,
+            'Event': event,
+            'Contact': contact
+        }
+        
+        mapping = dispatcher[identity.type]()
+        
+        mapping.backend = backend
+        mapping.remote_id = identity.identity
+        
+        self.session.add(mapping)
+        self.session.commit()
+    
+    def get_mapping(self, context, object):
+        """
+        Retrieve a mapping for the given object.
+        
+        @param context: The datastore context.
+        @param object: The local object.
+        """
+        
+        dispatcher = {
+            'Calendar': (CalendarBackendMapping, CalendarBackendMapping.calendar),
+            'Event': (EventBackendMapping, EventBackendMapping.event),
+            'Contact': (ContactBackendMapping, ContactBackendMapping.contact)
+        }
+        
+        mapping = dispatcher[object.__class__.__name__]
+
+        result = self.session.query(mapping[0]).filter(mapping[1] == object).all()
+        
+        return result
+
     
     def update_object(self, context, object):
         """
@@ -495,11 +537,12 @@ class SqlAlchemyBackend(Backend):
         @param object: The object to update.
         """
         
+        # TODO this is really ugly, as the whole session gets written to
+        # TODO disk as opposed to the method name.
+        # TODO need find a way to save only a specific object
+        # TODO but should work anyway because when the session starts,
+        # TODO there shouldnt be any objects pending.
         self.session.commit()
-        
-        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_UPDATE, object)
-        
-        return object
     
     def delete_object(self, context, object):
         """
@@ -510,12 +553,8 @@ class SqlAlchemyBackend(Backend):
         """
         
         self.session.delete(object)
-        
-        context.notify_secondary_backends(self.__class__.__name__, DataStore.OPERATION_DELETE, object)
-        
-        return None
 
-class GoogleBackend(Backend):
+class GoogleBackend(object):
     """
     Backend implementation using Google's GData API.
     """
@@ -532,32 +571,59 @@ class GoogleBackend(Backend):
         
         self.service = service
     
-    def handle_incoming_change(self, context, source, operation, object):
+    def hastime(self, object):
         """
-        Respond to a data change.
+        Check if the given datetime object contains time.
         
-        @param context: The datastore context.
-        @param source: The backend where the change occured.
-        @param operation: The change mode, can be insert, update or delete.
-        @param object: The changed object.
+        TODO: this implementation is not optimal as an intentional 
+        TODO: date at 00:00:00 produces a false positive result.
         
-        @return Nothing
+        @param object: The datetime object.
         """
-        
-        if self.__class__.__name__ == source:
-            return
-        
-        dispatcher = { 
-          DataStore.OPERATION_INSERT : self.insert_object,
-          DataStore.OPERATION_UPDATE : self.update_object,
-          DataStore.OPERATION_DELETE : self.delete_object
-        }
-        
-        result = dispatcher[operation](context, object)
-        
-        return result
+        return (object.hour != 0 or object.minute != 0 or object.second != 0)
     
-    def find_objects(self, context, query_object):
+    def _event_to_gdata(self, local_object, gdata_object):
+        """
+        Update a gdata_object with data from a local object.
+        
+        @param local_object: The local event object.
+        @param: gdata_object: The gdata event object.
+        """
+        
+        gdata_object.title = atom.data.Title(text=local_object.title)
+            
+        if local_object.description:
+            gdata_object.content = atom.data.Content(text=local_object.description)
+            
+        if local_object.location:
+            gdata_object.where.append(gdata.calendar.data.CalendarWhere(value=local_object.location))
+        
+        if self.hastime(local_object.start) and self.hastime(local_object.end):
+            date_format = self.date_format_time
+        elif not self.hastime(local_object.start) and not self.hastime(local_object.end):
+            date_format = self.date_format_allday
+        else:
+            raise ValueError('start/end date: mixing of datetime and date is not allowed. start={0}, end={1}'.format(local_object.start, local_object.end))
+        
+        start = local_object.start
+        
+        # Google API workaround
+        # when creating an event with start = x and end = y, 
+        # the created event ends at y-1
+        if local_object.start == local_object.end:
+            end = local_object.end
+        else:
+            delta = datetime.timedelta(1)
+            end = local_object.end + delta
+        
+        start_time = start.strftime(date_format)
+        end_time = end.strftime(date_format)
+        
+        gdata_object.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+        
+        return gdata_object
+    
+    def find_objects(self, context, query):
         """
         Find objects in the primary backend using a query object.
         
@@ -568,7 +634,18 @@ class GoogleBackend(Backend):
         nothing was found.
         """
         
-        raise NotImplementedError
+        def event_by_id():
+            return self.service.calendar_client.get_event_entry(uri=query.id)
+        
+        dispatcher = {
+            'event_by_id' : event_by_id
+        }
+        
+        request = query.get_name()
+        
+        result = dispatcher[request]()
+        
+        return result
     
     def insert_object(self, context, object):
         """
@@ -577,76 +654,73 @@ class GoogleBackend(Backend):
         @param context: The datastore context.
         @param object: The object to insert.
         
-        @return The given object with a populated id attribute.
+        @return The identity of the remote object.
         """
         
-        def hastime(object):
-            return (object.hour != 0 or object.minute != 0 or object.second != 0)
+        identity = DataStorePeerIdentity()
+        identity.backend = self.__class__.__name__
+        
+        def calendar():
+            pass
         
         def event():
             entry = gdata.calendar.data.CalendarEventEntry()
             
-            entry.title = atom.data.Title(text=object.title)
-                
-            if object.description:
-                entry.content = atom.data.Content(text=object.description)
-                
-            if object.location:
-                entry.where.append(gdata.calendar.data.CalendarWhere(value=object.location))
+            entry = self._event_to_gdata(object, entry)
             
-            if hastime(object.start) and hastime(object.end):
-                date_format = self.date_format_time
-            elif not hastime(object.start) and not hastime(object.end):
-                date_format = self.date_format_allday
-            else:
-                raise ValueError('start/end date: mixing of datetime and date is not allowed. start=%s, end=%s'.format(object.start, object.end))
-            
-            start = object.start
-            
-            # Google API workaround
-            # when creating an event with start = x and end = y, 
-            # the created event ends at y-1
-            if object.start == object.end:
-                end = object.end
-            else:
-                delta = datetime.timedelta(1)
-                end = object.end + delta
-            
-            start_time = start.strftime(date_format)
-            end_time = end.strftime(date_format)
-            
-            entry.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
-        
-            """ TODO catch error """
+            """ TODO catch errors """
             new_entry = self.service.calendar_client.InsertEvent(entry)
             
-            new_entry.id.text
+            identity.type = 'Event'
+            identity.identity = new_entry.id.text
             
-            
-            
-
-        
         def contact():
             pass
         
         dispatcher = {
-            Event : event,
-            Contact : contact
+            'Calendar' : calendar,
+            'Event' : event,
+            'Contact' : contact
         }
         
-        dispatcher[object.__class__]()
-
+        dispatcher[object.__class__.__name__]()
+        
+        return identity
     
-    def update_object(self, context, object):
+    def update_object(self, context, object, identity):
         """
         Update an existing object.
         
         @param context: The datastore context.
         @param object: The object to update.
+        @param identity: The object's peer identity.
         """
         
-        print "update object"
-        print object
+        def calendar():
+            pass
+        
+        def event():
+            query = context.get_query('event_by_id')
+            query.id = identity.identity
+            
+            entry = self.find_objects(context, query)
+            
+            entry = self._event_to_gdata(object, entry)
+            
+            """ TODO catch errors """
+            self.service.calendar_client.Update(entry)
+            
+        def contact():
+            pass
+        
+        dispatcher = {
+            'Calendar' : calendar,
+            'Event' : event,
+            'Contact' : contact
+        }
+        
+        dispatcher[object.__class__.__name__]()
+        
     
     def delete_object(self, context, object):
         """
@@ -660,7 +734,7 @@ class GoogleBackend(Backend):
         print object
     
 
-class FacebookBackend(Backend):
+class FacebookBackend(object):
     """
     Backend implementation using the Facebook API.
     """
