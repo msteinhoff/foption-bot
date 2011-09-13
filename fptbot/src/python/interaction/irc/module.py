@@ -330,11 +330,11 @@ class InteractiveModule(Module):
             #TODO: throw stack trace
             reply = 'Es ist ein interner Fehler aufgetreten, lol opfeeeeeer!'
             
-            self.client.logger.error('Unhandled exception "{1}" thrown in {0}'.format(
+            self.client.logger.exception('Unhandled exception "{1}" thrown in {0}'.format(
                 self.__class__.__name__,
                 str(ex)
             ))
-        
+            
         #-----------------------------------------------------------------------
         # send reply
         #-----------------------------------------------------------------------
