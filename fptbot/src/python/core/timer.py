@@ -48,7 +48,8 @@ class SingleTimer(BaseTimer):
         self.timer.start()
     
     def stop(self):
-        self.timer.stop()
+        self.timer.cancel()
+        self.timer = None
 
 
 class DailyTimer(BaseTimer):
@@ -61,7 +62,8 @@ class DailyTimer(BaseTimer):
     
     def stop(self):
         # TODO check if timer was started
-        self.timer.stop()
+        self.timer.cancel()
+        self.timer = None
     
     def _check(self, start):
         today = datetime.date.today()
