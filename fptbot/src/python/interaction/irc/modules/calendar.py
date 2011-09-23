@@ -77,7 +77,7 @@ class Calendar(InteractiveModule):
         
         self.logger = bot.get_logger('interaction.irc.calendar')
         self.config = bot.get_config('interaction.irc.calendar')
-        self.component = bot.get_component('calendar');
+        self.component = bot.get_subsystem('calendar-component');
         
         bot.register_timer(
             'interaction.irc.calendar.reminder',

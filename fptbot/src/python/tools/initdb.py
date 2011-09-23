@@ -40,7 +40,7 @@ from objects import *
 if __name__ == '__main__':
     bot = Bot()
     
-    persistence = bot.get_persistence()
+    persistence = bot.get_subsystem('local-persistence')
     
     base = SqlAlchemyPersistence.Base
     base.metadata.create_all(persistence.engine)

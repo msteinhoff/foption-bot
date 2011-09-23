@@ -45,7 +45,7 @@ class Facts(Module):
     #---------------------------------------------------------------------------
     def initialize(self):
         self.logger = self.client.bot.get_logger('interaction.irc.facts')
-        self.component = self.client.bot.get_component('facts')
+        self.component = self.client.bot.get_subsystem('facts-component')
         
     def get_receive_listeners(self):
         return {'Privmsg': self.random_post}

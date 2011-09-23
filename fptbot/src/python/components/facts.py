@@ -35,7 +35,8 @@ import re
 import datetime
 import htmlentitydefs
 
-from core.constants import TIME_HOUR
+from core import runlevel
+from core import constants
 from core.config import Config
 from core.component import Component, ComponentError
 from objects.facts import Fact
@@ -49,8 +50,13 @@ class FactsComponentError(ComponentError): pass
 # Business Logic
 # ------------------------------------------------------------------------------
 class FactsComponent(Component):
+    RUNLEVEL = runlevel.Runlevel(
+        autoboot=True,
+        minimum_start=runlevel.NETWORK_SERVICE
+    )
+    
     def __init__(self, bot):
-        self.bot = bot
+        Component.__init__(self, bot)
         
         self.bot.register_config(FactsComponentConfig)
         
@@ -67,12 +73,27 @@ class FactsComponent(Component):
     # --------------------------------------------------------------------------
     # Lifecycle
     # --------------------------------------------------------------------------
-    def start(self):
+    def _start(self):
+        """
+        Startup the component and background services (Timer).
+        
+        Implementation of Subsystem.start()
+        """
+        
         self.bot.get_timer('components.facts.update').start()
         
-           
-    def stop(self):
+        self._running()
+    
+    def _stop(self):
+        """
+        Shutdown the component and background services (Timer).
+        
+        Implementation of Subsystem.stop()
+        """
+        
         self.bot.get_timer('components.facts.update').stop()
+        
+        self._halted()
     
     # --------------------------------------------------------------------------
     # Component methods
@@ -191,5 +212,5 @@ class FactsComponentConfig(Config):
     def default_values(self):
         return {
             'lastRetrievalDate' : datetime.date(2011,1,1),
-            'retrievalInterval' : TIME_HOUR * 8
+            'retrievalInterval' : constants.TIME_HOUR * 8
         }

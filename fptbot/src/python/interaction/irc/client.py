@@ -35,6 +35,7 @@ import asyncore
 import asynchat
 import traceback
 
+from core import runlevel
 from core.config import Config
 from objects.irc import User
 from interaction.interaction import Interaction
@@ -52,6 +53,11 @@ CRLF = '\x0D\x0A'
 # Business Logic
 #-------------------------------------------------------------------------------
 class Client(Interaction, asynchat.async_chat):
+    RUNLEVEL = runlevel.Runlevel(
+        autoboot=True,
+        minimum_start=runlevel.NETWORK_INTERACTION
+    )
+    
     """
     Provide a RFC 2812 compilant IRC client implementation using asyncore.
     """
@@ -209,13 +215,15 @@ class Client(Interaction, asynchat.async_chat):
     #---------------------------------------------------------------------------
     # connection handling
     #---------------------------------------------------------------------------
-    def start(self):
+    def _start(self):
         """
         Connect to the IRC server.
         
         This method creates a streaming socket, connects to the IRC
         server defined in the local Config-object and starts the
         asyncore event loop.
+        
+        Implementation of Subsystem.start()
         """
         
         self.logger.info('starting client')
@@ -246,12 +254,14 @@ class Client(Interaction, asynchat.async_chat):
             #TODO  print errors
             self.logger.error('starting client failed: %s', msg)
 
-    def stop(self):
+    def _stop(self):
         """
         Disconnect from the IRC server.
         
         This message tells asyncore to close the connection after all
         queued messages were sent.
+        
+        Implementation of Subsystem.stop()
         """
         
         self.logger.info('stopping client')
@@ -301,6 +311,7 @@ class Client(Interaction, asynchat.async_chat):
         join.channels = channels
         join.send()
         
+        self._running()
     
     def pre_disconnect(self):
         """
@@ -314,7 +325,7 @@ class Client(Interaction, asynchat.async_chat):
         This trigger is called after the connection was closed.
         """
         
-        pass
+        self._halted()
 
     #---------------------------------------------------------------------------
     # low-level communication

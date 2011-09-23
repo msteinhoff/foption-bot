@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+from core import runlevel
 from core.config import Config
 from core.component import Component, ComponentError
 from objects.principal import Principal, Role
@@ -43,13 +44,39 @@ class PrincipalComponentError(ComponentError): pass
 # Business Logic
 # ------------------------------------------------------------------------------
 class PrincipalComponent(Component):
+    RUNLEVEL = runlevel.Runlevel(
+        autoboot=True,
+        minimum_start=runlevel.LOCAL_SERVICE
+    )
+
     def __init__(self, bot):
-        self.bot = bot
+        Component.__init__(self, bot)
         
         self.bot.register_config(PrincipalComponentConfig)
         
         self.config = self.bot.get_config('components.principal')
         self.logger = self.bot.get_logger('components.principal')
+    
+    # --------------------------------------------------------------------------
+    # Lifecycle
+    # --------------------------------------------------------------------------
+    def _start(self):
+        """
+        Startup the component and background services.
+        
+        Implementation of Subsystem.start()
+        """
+        
+        self._running()
+    
+    def _stop(self):
+        """
+        Shutdown the component and background services.
+        
+        Implementation of Subsystem.stop()
+        """
+        
+        self._halted()
     
     def find_principal_by_id(self, id):
         pass

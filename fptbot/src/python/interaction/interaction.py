@@ -30,7 +30,18 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-class Interaction(object):
+from core import subsystem
+from core.bot import BotError
+
+# ------------------------------------------------------------------------------
+# Exceptions
+# ------------------------------------------------------------------------------
+class InteractionError(BotError): pass
+
+# ------------------------------------------------------------------------------
+# Business Logic
+# ------------------------------------------------------------------------------
+class Interaction(subsystem.Subsystem):
     """
     Provides a basic structure for all interaction sub-systems.
     """
@@ -41,10 +52,10 @@ class Interaction(object):
         instance.start()
 
     def __init__(self, bot):
-        self.bot = bot
-    
-    def start(self):
-        raise NotImplementedError
-    
-    def stop(self):
-        raise NotImplementedError
+        """
+        Initialize the subsystem.
+        
+        @param bot: The bot instance.
+        """
+        
+        subsystem.Subsystem.__init__(self, bot)
