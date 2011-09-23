@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+from core import subsystem
 from core.bot import BotError
 
 # ------------------------------------------------------------------------------
@@ -40,21 +41,10 @@ class ComponentError(BotError): pass
 # ------------------------------------------------------------------------------
 # Business Logic
 # ------------------------------------------------------------------------------
-class Component(object):
+class Component(subsystem.Subsystem):
     """
     Component interface.
     """
     
-    def start(self):
-        """
-        Start the component and any background services.
-        """
-        
-        pass
-    
-    def stop(self):
-        """
-        Stop the component and any background services.
-        """
-        
-        pass
+    def __init__(self, bot):
+        subsystem.Subsystem.__init__(self, bot)

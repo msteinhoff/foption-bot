@@ -31,21 +31,19 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import logging
-import multiprocessing
+import collections
 
+from core import runlevel
 from core.timer import timer_map
 from core.config import Config
-from core.persistence import SqlAlchemyPersistence, GoogleApiService
-from interaction.interaction import Interaction
 
 # ------------------------------------------------------------------------------
 # Exceptions
 # ------------------------------------------------------------------------------
 class BotError(Exception): pass
 class ConfigRegisteredError(BotError): pass
-class InteractionRegisteredError(BotError): pass
-class ComponentRegisteredError(BotError): pass
 class TimerRegisteredError(BotError): pass
+class SubsystemRegisteredError(BotError): pass
 
 # ------------------------------------------------------------------------------
 # Business Logic
@@ -64,22 +62,23 @@ class Bot(object):
         
         self.logger = self.get_logger()
         
+        self.__runlevel = runlevel.HALT
+        self.__runlevel_map = collections.defaultdict(list)
+        
         self._config = {}
         self._timer = {}
-        self._persistence = {}
-        self._components = {}
-        self._interaction = {}
+        self._subsystems = {}
         self._processes = {}
         
         self.register_config(BotConfig)
         self.apply_logger_config()
         
-        self.register_persistence('local', SqlAlchemyPersistence(self.get_config('core.bot').get('database-connectstring')))
-        self.register_persistence('google', GoogleApiService(self))
-        self.register_component('principal', 'components.principal.PrincipalComponent')
-        self.register_component('calendar', 'components.calendar.CalendarComponent')
-        self.register_component('facts', 'components.facts.FactsComponent')
-        self.register_interaction('irc', 'interaction.irc.client.Client')
+        self.register_subsystem('local-persistence', 'core.persistence.SqlAlchemyPersistence', connect_string=self.get_config('core.bot').get('database-connectstring'))
+        self.register_subsystem('google-api-service', 'core.persistence.GoogleApiService')
+        self.register_subsystem('principal-component', 'components.principal.PrincipalComponent')
+        self.register_subsystem('calendar-component', 'components.calendar.CalendarComponent')
+        self.register_subsystem('facts-component', 'components.facts.FactsComponent')
+        self.register_subsystem('irc-client', 'interaction.irc.client.Client')
         
     def get_object( self, name ):
         """
@@ -124,19 +123,6 @@ class Bot(object):
         pass
     
     #---------------------------------------------------------------------------
-    # persistence
-    #---------------------------------------------------------------------------
-    def register_persistence(self, identifier, instance):
-        self._persistence[identifier] = instance
-    
-    def get_persistence(self, identifier='local'):
-        """
-        Return the persistence instance.
-        """
-        
-        return self._persistence[identifier]
-    
-    #---------------------------------------------------------------------------
     # configuration
     #---------------------------------------------------------------------------
     def register_config(self, clazz):
@@ -163,48 +149,18 @@ class Bot(object):
         return self._config
     
     #---------------------------------------------------------------------------
-    # interaction
-    #---------------------------------------------------------------------------
-    def register_interaction(self, identifier, classname):
-        """
-        @param identifier: 
-        @param clazz: 
-        """
-    
-        if identifier in self._interaction:
-            raise InteractionRegisteredError
-        
-        clazz = self.get_object(classname)
-        
-        self._interaction[identifier] = clazz(self)
-        
-    #---------------------------------------------------------------------------
-    # components
-    #---------------------------------------------------------------------------
-    def register_component(self, identifier, classname):
-        """
-        @param identifier: 
-        @param clazz: 
-        """
-        
-        if identifier in self._components:
-            raise ComponentRegisteredError
-        
-        clazz = self.get_object(classname)
-        
-        self._components[identifier] = clazz(self)
-        
-    def get_component(self, identifier):
-        """
-        @param identifier: 
-        """
-        
-        return self._components[identifier]
-    
-    #---------------------------------------------------------------------------
     # timer
     #---------------------------------------------------------------------------
     def register_timer(self, identifier, type, interval, callback):
+        """
+        Register a new timer with the bot.
+        
+        @param identifier: The identifier of the timer.
+        @param type: The requested type.
+        @param interval: The type-specific interval.
+        @param callback: The callback to execute when the timer is fired.
+        """
+        
         if identifier in self._timer:
             raise TimerRegisteredError(identifier)
         
@@ -212,28 +168,94 @@ class Bot(object):
         
     def get_timer(self, identifier):
         """
-        @param identifier: 
+        @param identifier: The identifier of the timer.
+        
+        @Return The timer instance.
         """
         
         return self._timer[identifier]
     
     #---------------------------------------------------------------------------
-    # system
+    # subsystems
     #---------------------------------------------------------------------------
-    def run(self):
+    def register_subsystem(self, identifier, classname, **kwargs):
         """
-        Start the system.
+        Register a new subsystem.
         
-        Initialize all interaction components in their own thread
-        and call their start() method.
+        @param identifier: The identifier for the instanciated subsystem.
+        @param classname: The fully qualified classname of the subsystem.
+        @param **kwargs: Any additional constructor arguments.
+        """
+    
+        if identifier in self._subsystems:
+            raise SubsystemRegisteredError
+        
+        clazz = self.get_object(classname)
+        
+        self._subsystems[identifier] = clazz(self, **kwargs)
+        
+        # using defaultdict here
+        self.__runlevel_map[clazz.RUNLEVEL.level].append(identifier)
+    
+    def get_subsystem(self, identifier):
+        """
+        Return the subsystem instance.
+        
+        @identifier: The identifier of the subsystem.
+        
+        @return The subsystem instance.
         """
         
-        self.get_persistence().open()
+        return self._subsystems[identifier]
+    
+    #---------------------------------------------------------------------------
+    # bootstrapping
+    #---------------------------------------------------------------------------
+    def init(self, requested):
+        """
+        Execute a runlevel switch.
         
-        for name, component in self._components.items():
-            self.logger.info('starting component %s', name)
-            component.start()
+        @param requested: The requested runlevel.
+        """
         
+        if self.__runlevel == requested:
+            return
+        
+        direction = runlevel.calculate_direction(self.__runlevel, requested)
+        distance = runlevel.calculate_distance(self.__runlevel, requested)
+        
+        self.logger.info('switching runlevel: %s to %s', self.__runlevel, requested)
+        
+        for next in distance:#
+            self.__runlevel = next
+            
+            if direction == runlevel.DIRECTION_UP:
+                self.logger.info('entering runlevel %s', next)
+                self._start_subsystems(next)
+                
+            if direction == runlevel.DIRECTION_DOWN:
+                self.logger.info('leaving runlevel %s', next)
+                self._stop_subsystems(next)
+            
+        self.__runlevel = requested
+        
+        self.logger.info('runlevel switched: %s', self.__runlevel)
+        
+        # temporary solution because the system currently uses only one thread.
+        #self.init(runlevel.HALT)
+    
+    def get_runlevel(self):
+        """
+        Return the current runlevel of the system.
+        """
+        
+        return self.__runlevel
+    
+    def _start_subsystems(self, requested):
+        """
+        Start all subsystems for the requested runlevel.
+        
+        TODO multithreaded or singlethreaded, event-based architecture
         for name, object in self._interaction.items():
             #self._processes[name] = multiprocessing.Process(target=Interaction.startInteraction, args=(self, object))
             #self._processes[name].start()
@@ -241,26 +263,27 @@ class Bot(object):
             self.logger.info('starting process %s', name)
             self._processes[name] = object
             self._processes[name].start()
-        
-        # temporary solution because the system currently uses only one thread. 
-        self.halt()
-        
-    def halt(self):
-        """
-        Shutdown the system.
+
+        @param requested: The requested runlevel.
         """
         
-        for name, object in self._processes.items():
-            self.logger.info('stopping process %s', name)
-            object.stop()
+        for identifier in self.__runlevel_map[requested]:
+            self.logger.info('trying to start subsystem: %s', identifier)
+            self._subsystems[identifier].start()
+            self.logger.info('subsystem started: %s', identifier)
         
-        for name, component in self._components.items():
-            self.logger.info('stopping component %s', name)
-            component.stop()
-            
-        self.get_persistence().close()
-
-
+    def _stop_subsystems(self, requested):
+        """
+        Stop all subsystems for the requested runlevel.
+        
+        @param requested: The requested runlevel.
+        """
+        
+        for identifier in self.__runlevel_map[requested]:
+            self.logger.info('trying to stop subsystem: %s', identifier)
+            self._subsystems[identifier].stop()
+            self.logger.info('subsystem stopped: %s', identifier)
+    
 class BotConfig(Config):
     identifier = 'core.bot'
         
