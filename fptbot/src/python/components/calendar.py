@@ -30,16 +30,16 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import datetime
-import logging
 
-import sqlalchemy
 import sqlalchemy.orm.exc
-import gdata.calendar.data
 import atom.data
+import gdata.data
+import gdata.calendar.data
 
+from core import runlevel
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event, Contact, Backend, EventBackendMapping,\
-    ContactBackendMapping, CalendarBackendMapping, BackendMapping
+from objects.calendar import Calendar, Event, Contact, Backend,\
+    CalendarPeerIdentity, EventPeerIdentity, ContactPeerIdentity
 
 # ------------------------------------------------------------------------------
 # Exceptions
@@ -51,8 +51,13 @@ class InvalidEventId(CalendarComponentError): pass
 # Business Logic
 # ------------------------------------------------------------------------------
 class CalendarComponent(Component):
+    RUNLEVEL = runlevel.Runlevel(
+        autoboot=True,
+        minimum_start=runlevel.LOCAL_SERVICE
+    )
+    
     def __init__(self, bot):
-        self.bot = bot
+        Component.__init__(self, bot)
         
         self.logger = self.bot.get_logger('components.calendar')
         
@@ -61,19 +66,34 @@ class CalendarComponent(Component):
     # --------------------------------------------------------------------------
     # Lifecycle
     # --------------------------------------------------------------------------
-    def start(self):
-        self.datastore = DataStore()
+    def _start(self):
+        """
+        Startup the component and background services (DataStore, Backends).
+        
+        Implementation of Subsystem.start()
+        """
+        
+        self.datastore = DataStore(DataStoreOneWaySync)
         
         # Setup primary backend
-        sqlite = SqlAlchemyBackend(self.bot.get_persistence('local'))
+        sqlite = SqlAlchemyBackend(self.bot.get_subsystem('local-persistence'))
         self.datastore.set_primary_backend(sqlite)
         
         # Setup secondary backend
-        google = GoogleBackend(self.bot.get_persistence('google'))
+        google = GoogleBackend(self.bot.get_subsystem('google-api-service'))
         self.datastore.register_secondary_backend(google)
         
-    def stop(self):
+        self._running()
+        
+    def _stop(self):
+        """
+        Shutdown the component and background services (DataStore, Backends).
+        
+        Implementation of Subsystem.stop()
+        """
         self.datastore = None
+        
+        self._halted()
     
     # --------------------------------------------------------------------------
     # Component methods
@@ -108,7 +128,12 @@ class CalendarComponent(Component):
         if event.id != None:
             raise ValueError('event.id must be None')
         
-        return self.datastore.insert_object('CalendarComponent', event)
+        result = self.datastore.insert_object(
+            CalendarComponent.__class__.__name__, 
+            event
+        )
+        
+        return result
         
     def update_object(self, event):
         if event == None:
@@ -118,7 +143,11 @@ class CalendarComponent(Component):
             raise ValueError('event.id must be given')
         
         try:
-            return self.datastore.update_object('CalendarComponent', event)
+            self.datastore.update_object(
+                CalendarComponent.__class__.__name__, 
+                event
+            )
+        
         except KeyError:
             raise InvalidEventId
         
@@ -129,7 +158,11 @@ class CalendarComponent(Component):
         try:
             event = self.find_event_by_id(eventId)
             
-            self.datastore.delete_object('CalendarComponent', event)
+            self.datastore.delete_object(
+                CalendarComponent.__class__.__name__, 
+                event
+            )
+        
         except KeyError:
             raise InvalidEventId
 
@@ -144,14 +177,16 @@ class DataStore():
     between the primary and secondary backends.
     """
     
-    def __init__(self):
+    def __init__(self, strategy):
         """
         Initialize the datastore.
+        
+        @param: Class pointer to the sync strategy implementation to use.
         """
         
         self.primary_backend = None
         self.secondary_backends = []
-        self.strategy = DataStoreOneWaySync(self)
+        self.strategy = strategy(self)
     
     def set_primary_backend(self, backend):
         """
@@ -203,8 +238,9 @@ class DataStore():
     
     def insert_object(self, source, object):
         """
-        insert a new object in the primary backend.
+        insert a new object into the datastore.
         
+        @param source: The source of this action.
         @param object: The object to insert.
         
         @return The given object with a populated id attribute.
@@ -214,21 +250,78 @@ class DataStore():
     
     def update_object(self, source, object):
         """
-        Update an existing object in the primary backend.
+        Update an existing object in the datastore.
         
+        @param source: The source of this action.
         @param object: The object to update.
+        
+        @return The updated object.
         """
         
-        return self.strategy.update(source, object)
+        self.strategy.update(source, object)
     
     def delete_object(self, source, object):
         """
-        Delete an existing object in the primary backend.
+        Delete an existing object from the datastore.
         
+        @param source: The source of this action.
         @param object: The object to delete.
         """
         
-        return self.strategy.delete(source, object)
+        self.strategy.delete(source, object)
+
+class DataStoreQuery(object):
+    """
+    An abstract data store query.
+    
+    This object only contains the general name of the specific query.
+    Arbitrary query parameters can be added at runtime. When the query is run
+    against the backends, the name is used to identify the concrete query
+    objects provided by the backends.
+    """
+    
+    def __init__(self, name):
+        """
+        Instantiate a new query object.
+        
+        @param name: The query name.
+        """
+        
+        self.__query_name = name
+        
+    def get_name(self):
+        """
+        Return the query name.
+        
+        @return The query name.
+        """
+        
+        return self.__query_name
+    
+    def get_parameters(self):
+        """
+        Return a dictionary with query parameters.
+        
+        @return A dictionary with query parameters.
+        """
+        
+        # TODO filter private attributes
+        return self.__dict__
+
+class DataStorePeerIdentity(object):
+    """
+    A storage-idenpendent, backend-specific identity for a given entity.
+    """
+    
+    def __init__(self, backend=None, type=None, identity=None):
+        """
+        @param backend: The classname of the backend.
+        @param type: The classname of the entity type.
+        @param identity: The entity identity.
+        """
+        self.backend = backend
+        self.type = type
+        self.identity = identity
 
 class DataStoreSyncStrategy(object):
     """
@@ -277,9 +370,13 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         storedObject = primary.insert_object(context, object)
         
         for secondary in secondaries:
-            identity = secondary.insert_object(context, object)
+            datastore_identity = secondary.insert_object(context, object)
             
-            primary.create_mapping(context, storedObject, identity)
+            primary.create_peer_identity(
+                context,
+                storedObject,
+                datastore_identity
+            )
             
         return storedObject
         
@@ -290,13 +387,21 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         
         primary.update_object(context, object)
         
-        mapping = {}
+        identities = {}
         
-        for map in primary.get_mapping(context, object):
-            mapping[map.backend.name] = DataStorePeerIdentity(identity=map.remote_id)
+        for identity in primary.get_peer_identities(context, object):
+            identities[identity.backend.name] = DataStorePeerIdentity(
+                backend=identity.backend.name,
+                type=identity.data_type,
+                identity=identity.identity
+            )
         
         for secondary in secondaries:
-            identity = secondary.update_object(context, object, mapping[secondary.__class__.__name__])
+            secondary.update_object(
+                context,
+                object,
+                identities[secondary.__class__.__name__]
+            )
             
     def delete(self, source, object):
         pass
@@ -308,79 +413,6 @@ class DataStoreTwoWaySync(DataStoreSyncStrategy):
         pass
     def delete(self, source, object):
         pass
-
-class DataStoreQuery(object):
-    """
-    An abstract data store query.
-    
-    This object only contains the general name of the specific query.
-    Arbitrary query parameters can be added at runtime. When the query is run
-    against the backends, the name is used to identify the concrete query
-    objects provided by the backends.
-    """
-    
-    def __init__(self, name):
-        """
-        Instantiate a new query object.
-        
-        @param name: The query name.
-        """
-        
-        self.__query_name = name
-        
-    def get_name(self):
-        """
-        Return the query name.
-        
-        @return The query name.
-        """
-        
-        return self.__query_name
-    
-    def get_parameters(self):
-        """
-        Return a dictionary with query parameters.
-        
-        @return A dictionary with query parameters.
-        """
-        
-        # TODO filter private attributes
-        return self.__dict__
-
-class DataStoreChangeRequest(object):
-    """
-    A backend-agnostic change request within the datastore.
-    """
-    
-    OPERATION_INSERT = 0x01
-    OPERATION_UPDATE = 0x02
-    OPERATION_DELETE = 0x03
-    
-    def __init__(self, source=None, operation=None, object=None):
-        """
-        @param source: The source of the change.
-        @param operation: The operation on the given object.
-        @param object: The new data object.
-        """
-        
-        self.source = source
-        self.operation = operation
-        self.object = object
-
-class DataStorePeerIdentity(object):
-    """
-    A backend-specific identity for a given entity.
-    """
-    
-    def __init__(self, backend=None, type=None, identity=None):
-        """
-        @param backend: The classname of the backend.
-        @param type: The classname of the entity type.
-        @param identity: The entity identity.
-        """
-        self.backend = backend
-        self.type = type
-        self.identity = identity
 
 class SqlAlchemyBackend(object):
     """
@@ -395,6 +427,93 @@ class SqlAlchemyBackend(object):
         """
         
         self.session = persistence.get_session()
+    
+    def request_backend(self, name):
+        """
+        Request a backend object from the database.
+        When the object was not found, a new object will be created.
+        
+        @param name: The name of the backend.
+        
+        @return A Backend instance.
+        """
+        
+        try:
+            backend = self.session \
+                    .query(Backend) \
+                    .filter(Backend.name == name) \
+                    .one()
+                    
+        except sqlalchemy.orm.exc.NoResultFound:
+            backend = Backend(name=name)
+            
+            self.session.add(backend)
+        
+        return backend
+
+    
+    def create_peer_identity(self, context, object, datastore_identity):
+        """
+        Create a mapping between a local object and an remote peer identity.
+        
+        @param context: The datastore context.
+        @param object: The local object.
+        @param identity: The DataStorePeerIdentity object.
+        """
+        
+        def calendar():
+            identity = CalendarPeerIdentity()
+            identity.calendar = object
+            
+            return identity
+        
+        def event():
+            identity = EventPeerIdentity()
+            identity.event = object
+            
+            return identity
+        
+        def contact():
+            identity = ContactPeerIdentity()
+            identity.contact = object
+            
+            return identity
+        
+        dispatcher = {
+            'Calendar': calendar,
+            'Event': event,
+            'Contact': contact
+        }
+        
+        identity = dispatcher[datastore_identity.type]()
+        
+        identity.backend = self.request_backend(datastore_identity.backend)
+        identity.identity = datastore_identity.identity
+        
+        self.session.add(identity)
+        
+        self.session.commit()
+    
+    def get_peer_identities(self, context, object):
+        """
+        Retrieve a mapping for the given object.
+        
+        @param context: The datastore context.
+        @param object: The local object.
+        """
+        
+        dispatcher = {
+            'Calendar': (CalendarPeerIdentity, CalendarPeerIdentity.calendar),
+            'Event': (EventPeerIdentity, EventPeerIdentity.event),
+            'Contact': (ContactPeerIdentity, ContactPeerIdentity.contact)
+        }
+        
+        type = dispatcher[object.__class__.__name__]
+
+        result = self.session.query(type[0]).filter(type[1] == object).all()
+        
+        return result
+
     
     def find_objects(self, context, query):
         """
@@ -455,80 +574,6 @@ class SqlAlchemyBackend(object):
         
         return object
     
-    def create_mapping(self, context, object, identity):
-        """
-        Create a mapping between a local object and an remote peer identity.
-        
-        @param context: The datastore context.
-        @param object: The local object.
-        @param identity: The remote peer identity.
-        """
-        
-        try:
-            backend = self.session \
-                    .query(Backend) \
-                    .filter(Backend.name == identity.backend) \
-                    .one()
-                    
-        except sqlalchemy.orm.exc.NoResultFound:
-            backend = Backend(name=identity.backend)
-            
-            self.session.add(backend)
-            self.session.commit()
-        
-        def calendar():
-            mapping = CalendarBackendMapping()
-            mapping.calendar = object
-            
-            return mapping
-        
-        def event():
-            mapping = EventBackendMapping()
-            mapping.event = object
-            
-            return mapping
-        
-        def contact():
-            mapping = ContactBackendMapping()
-            mapping.contact = object
-            
-            return mapping
-        
-        dispatcher = {
-            'Calendar': calendar,
-            'Event': event,
-            'Contact': contact
-        }
-        
-        mapping = dispatcher[identity.type]()
-        
-        mapping.backend = backend
-        mapping.remote_id = identity.identity
-        
-        self.session.add(mapping)
-        self.session.commit()
-    
-    def get_mapping(self, context, object):
-        """
-        Retrieve a mapping for the given object.
-        
-        @param context: The datastore context.
-        @param object: The local object.
-        """
-        
-        dispatcher = {
-            'Calendar': (CalendarBackendMapping, CalendarBackendMapping.calendar),
-            'Event': (EventBackendMapping, EventBackendMapping.event),
-            'Contact': (ContactBackendMapping, ContactBackendMapping.contact)
-        }
-        
-        mapping = dispatcher[object.__class__.__name__]
-
-        result = self.session.query(mapping[0]).filter(mapping[1] == object).all()
-        
-        return result
-
-    
     def update_object(self, context, object):
         """
         Update an existing object.
@@ -584,20 +629,49 @@ class GoogleBackend(object):
     
     def _event_to_gdata(self, local_object, gdata_object):
         """
-        Update a gdata_object with data from a local object.
+        Copy data from a local event object to a gdata event object.
         
         @param local_object: The local event object.
-        @param: gdata_object: The gdata event object.
+        @param gdata_object: The gdata event object.
         """
         
-        gdata_object.title = atom.data.Title(text=local_object.title)
-            
-        if local_object.description:
-            gdata_object.content = atom.data.Content(text=local_object.description)
-            
-        if local_object.location:
-            gdata_object.where.append(gdata.calendar.data.CalendarWhere(value=local_object.location))
+        #-----------------------------------------------------------------------
+        # Event: title
+        #-----------------------------------------------------------------------
+        if local_object.title:
+            if gdata_object.title:
+                gdata_object.title.text = local_object.title
+            else:
+                gdata_object.title = atom.data.Title(text=local_object.title)
         
+        #-----------------------------------------------------------------------
+        # Event: title
+        #-----------------------------------------------------------------------
+        if local_object.description:
+            if gdata_object.content:
+                gdata_object.content.text = local_object.description
+            else:
+                gdata_object.content = atom.data.Content(text=local_object.description)
+        
+        #-----------------------------------------------------------------------
+        # Event: where
+        #-----------------------------------------------------------------------
+        if len(gdata_object.where) > 0:
+            # TODO: bad implementation, unclear specification from google
+            # TODO: assume where always contains only one element with index 0
+            where = gdata_object.where[0]
+            where.value = local_object.location
+            
+        else:
+            where = gdata.calendar.data.CalendarWhere(
+                value=local_object.location
+            )
+            
+            gdata_object.where.append(where)
+        
+        #-----------------------------------------------------------------------
+        # Event: when
+        #-----------------------------------------------------------------------
         if self.hastime(local_object.start) and self.hastime(local_object.end):
             date_format = self.date_format_time
         elif not self.hastime(local_object.start) and not self.hastime(local_object.end):
@@ -619,7 +693,20 @@ class GoogleBackend(object):
         start_time = start.strftime(date_format)
         end_time = end.strftime(date_format)
         
-        gdata_object.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+        if len(gdata_object.when) > 0:
+            # TODO: bad implementation, missing docs from google
+            # TODO: assume when always contains only one element with index 0
+            when = gdata_object.when[0]
+            
+            when.start = start_time
+            when.end = end_time
+        else:
+            when = gdata.calendar.data.When(
+                start=start_time, 
+                end=end_time
+            )
+            
+            gdata_object.when.append(when)
         
         return gdata_object
     
@@ -672,7 +759,7 @@ class GoogleBackend(object):
             new_entry = self.service.calendar_client.InsertEvent(entry)
             
             identity.type = 'Event'
-            identity.identity = new_entry.id.text
+            identity.identity = new_entry.GetEditLink().href
             
         def contact():
             pass
@@ -703,12 +790,12 @@ class GoogleBackend(object):
             query = context.get_query('event_by_id')
             query.id = identity.identity
             
-            entry = self.find_objects(context, query)
+            current_entry = self.find_objects(context, query)
             
-            entry = self._event_to_gdata(object, entry)
+            updated_entry = self._event_to_gdata(object, current_entry)
             
             """ TODO catch errors """
-            self.service.calendar_client.Update(entry)
+            self.service.calendar_client.Update(updated_entry)
             
         def contact():
             pass
@@ -720,7 +807,6 @@ class GoogleBackend(object):
         }
         
         dispatcher[object.__class__.__name__]()
-        
     
     def delete_object(self, context, object):
         """

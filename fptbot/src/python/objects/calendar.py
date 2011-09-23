@@ -140,22 +140,21 @@ class Backend(SqlAlchemyPersistence.Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(64))
 
-class BackendMapping(SqlAlchemyPersistence.Base):
+class BackendPeerIdentity(SqlAlchemyPersistence.Base):
     """
-    Represent the mapping between local and remote objects.
+    Represent a remote (peer) identity for a locally stored object.
     
     The class structure is as the following:
-    + BackendMapping
-    +-- CalendarBackendMapping
-    +-- EventBackendMapping
-    +-- ContactBackendMapping
+    + BackendPeerIdentity
+    +-- CalendarPeerIdentity
+    +-- EventPeerIdentity
+    +-- ContactPeerIdentity
     """
-    __tablename__ = 'backend_mapping'
+    __tablename__ = 'backend_identity'
     
-    data_type = Column(String(64), primary_key=True)
-    #local_id = Column(Integer, primary_key=True)
-    backend_id = Column(Integer, ForeignKey('backends.id'), primary_key=True)
-    remote_id = Column(String(255))
+    identity = Column(String(255), primary_key=True)
+    backend_id = Column(Integer, ForeignKey('backends.id'))
+    data_type = Column(String(64))
     
     backend = relationship('Backend')
     
@@ -163,30 +162,31 @@ class BackendMapping(SqlAlchemyPersistence.Base):
        'polymorphic_on': data_type
    }
 
-class CalendarBackendMapping(BackendMapping):
+class CalendarPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
-       'polymorphic_identity': 'calendar'
+       'polymorphic_identity': 'Calendar'
     }
 
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
     calendar = relationship('Calendar')
     
 
-class EventBackendMapping(BackendMapping):
+class EventPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
-       'polymorphic_identity': 'event'
+       'polymorphic_identity': 'Event'
     }
 
     event_id = Column(Integer, ForeignKey('events.id'))
     event = relationship('Event')
 
-class ContactBackendMapping(BackendMapping):
+class ContactPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
-       'polymorphic_identity': 'contact'
+       'polymorphic_identity': 'Contact'
     }
 
     contact_id = Column(Integer, ForeignKey('contacts.id'))
     contact = relationship('Contact')
+
 
 
 #-------------------------------------------------------------------------------
