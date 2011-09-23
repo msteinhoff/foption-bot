@@ -33,6 +33,7 @@ __version__ = '$Rev$'
 
 import argparse
 
+from core import runlevel
 from core.bot import Bot
 
 def parseargs():
@@ -60,6 +61,7 @@ def parseargs():
 
 def config_init(args):
     bot = Bot()
+    bot.init(runlevel.LOCAL_FILESYSTEM)
     
     def _init(identifier, object):
         print 'initializing configuration: {0}'.format(identifier)
@@ -84,6 +86,7 @@ def config_init(args):
 
 def config_read(args):
     bot = Bot()
+    bot.init(runlevel.LOCAL_FILESYSTEM)
     
     identifier = args.identifier
     
@@ -119,6 +122,7 @@ def config_read(args):
 
 def config_write(args):
     bot = Bot()
+    bot.init(runlevel.LOCAL_FILESYSTEM)
     
     identifier = args.identifier
     key = args.key

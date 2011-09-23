@@ -31,14 +31,19 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+from core import runlevel
 from core.bot import Bot
 from core.persistence import SqlAlchemyPersistence
 
 # Load all table definitions
-from objects import *
+import objects.principal
+import objects.irc
+import objects.calendar
+import objects.facts
 
 if __name__ == '__main__':
     bot = Bot()
+    bot.init(runlevel.LOCAL_FILESYSTEM)
     
     persistence = bot.get_subsystem('local-persistence')
     
