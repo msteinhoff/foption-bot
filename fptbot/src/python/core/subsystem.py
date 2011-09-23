@@ -67,7 +67,7 @@ class Subsystem(object):
         try:
             self._start()
         
-        except Exception as e:
+        except Exception:
             logger = self.bot.get_logger()
             logger.exception('Failed to start subsystem %s', self.__class__.__name__)
     

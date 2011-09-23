@@ -33,7 +33,6 @@ __version__ = '$Rev$'
 from core import runlevel
 from core.config import Config
 from core.component import Component, ComponentError
-from objects.principal import Principal, Role
 
 # ------------------------------------------------------------------------------
 # Exceptions

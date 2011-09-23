@@ -33,12 +33,11 @@ import datetime
 
 import sqlalchemy.orm.exc
 import atom.data
-import gdata.data
 import gdata.calendar.data
 
 from core import runlevel
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event, Contact, Backend,\
+from objects.calendar import Calendar, Event, Backend,\
     CalendarPeerIdentity, EventPeerIdentity, ContactPeerIdentity
 
 # ------------------------------------------------------------------------------

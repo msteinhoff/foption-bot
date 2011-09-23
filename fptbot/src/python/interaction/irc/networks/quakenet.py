@@ -30,8 +30,6 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-
-from interaction.irc.message import Event
 from interaction.irc.commands import Command
 
 list = [
