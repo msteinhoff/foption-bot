@@ -39,7 +39,7 @@ from core.constants import TIME_MINUTE
 from core.config import Config
 from objects.calendar import Event
 
-from components.calendar import InvalidEventId
+from components.calendar import InvalidObjectId
 from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply, ModuleError, Location
 
 #-------------------------------------------------------------------------------
@@ -388,7 +388,7 @@ class Calendar(InteractiveModule):
                 if count > 1:
                     raise AmbiguousEventsFound(events)
                 
-                eventId = events[0].id
+                event = events[0]
             
             except DateFormatInvalid:
                 #---------------------------------------------------------------
@@ -396,11 +396,16 @@ class Calendar(InteractiveModule):
                 #---------------------------------------------------------------
                 eventId = int(id_or_date)
                 
-            self.component.delete_event(eventId)
+                event = self.component.find_event_by_id(eventId)
+                
+                if count == 0:
+                    raise NoEventsFound
+                
+            self.component.delete_object(event)
             
             reply.add_line("Done.")
             
-        except InvalidEventId:
+        except InvalidObjectId:
             reply.add_line("Kein Eintrag zu dieser ID gefunden.")
         
         except NoEventsFound:
