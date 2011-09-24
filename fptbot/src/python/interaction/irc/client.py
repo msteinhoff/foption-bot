@@ -123,7 +123,7 @@ class Client(Interaction, asynchat.async_chat):
         name = command.__name__
         token = command.token
         
-        self.logger.info('registering command handler: (Name=%s,IRCToken=%s)', name, token)
+        self.logger.debug('registering command handler: (Name=%s,IRCToken=%s)', name, token)
         
         instance = command(self)
         receiver = instance.get_receiver()
@@ -183,7 +183,7 @@ class Client(Interaction, asynchat.async_chat):
         @return The module object.
         """
         
-        self.logger.info('loading module %s', name)
+        self.logger.debug('initializing module: %s', name)
         
         classname  = 'interaction.irc.modules.{0}.{1}'.format(name, name.capitalize())
         
@@ -194,10 +194,10 @@ class Client(Interaction, asynchat.async_chat):
         self._modules[name] = instance
         
         for command_name, listener in instance.get_receive_listeners().items():
-            self.logger.info('registering receive listener: (Module=%s,Listener=%s)', name, command_name)
+            self.logger.debug('registering receive listener: (Module=%s,Listener=%s)', name, command_name)
             self._recvname[command_name].add_listener(listener)
         
-        self.logger.info('loading module %s done', name)
+        self.logger.debug('initialized module: %s', name)
             
         return instance
         
