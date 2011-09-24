@@ -168,7 +168,7 @@ class CalendarPeerIdentity(BackendPeerIdentity):
     }
 
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
-    calendar = relationship('Calendar')
+    calendar = relationship('Calendar', backref=backref('identities', order_by=BackendPeerIdentity.backend_id, cascade="all, delete-orphan"))
     
 
 class EventPeerIdentity(BackendPeerIdentity):
@@ -177,7 +177,7 @@ class EventPeerIdentity(BackendPeerIdentity):
     }
 
     event_id = Column(Integer, ForeignKey('events.id'))
-    event = relationship('Event')
+    event = relationship('Event', backref=backref('identities', order_by=BackendPeerIdentity.backend_id))
 
 class ContactPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
@@ -185,8 +185,7 @@ class ContactPeerIdentity(BackendPeerIdentity):
     }
 
     contact_id = Column(Integer, ForeignKey('contacts.id'))
-    contact = relationship('Contact')
-
+    contact = relationship('Contact', backref=backref('identities', order_by=BackendPeerIdentity.backend_id))
 
 
 #-------------------------------------------------------------------------------
