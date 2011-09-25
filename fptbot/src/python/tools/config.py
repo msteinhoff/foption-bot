@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: UTF-8 -*-
 """
 $Id$
@@ -32,6 +31,7 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import argparse
+import logging
 
 from core import runlevel
 from core.bot import Bot
@@ -60,11 +60,13 @@ def parseargs():
     args.func(args)
 
 def config_init(args):
-    bot = Bot()
+    bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
+    logger = bot.get_logger('tools.config')
+    
     def _init(identifier, object):
-        print 'initializing configuration: {0}'.format(identifier)
+        logger.info('initializing configuration: %s', identifier)
         
         object.init(object.default_values())
         object.save()
@@ -82,11 +84,15 @@ def config_init(args):
             _init(identifier, object)
         
         except KeyError:
-            print "{} is not a valid identifier".format(identifier)
+            logger.critical('invalid identifier: %s', identifier)
+            
+    bot.init(runlevel.HALT)
 
 def config_read(args):
-    bot = Bot()
+    bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
+    
+    logger = bot.get_logger('tools.config')
     
     identifier = args.identifier
     
@@ -96,7 +102,7 @@ def config_read(args):
     try:
         object = bot.get_config(identifier)
     except KeyError:
-        print "{} is not a valid identifier".format(identifier)
+        logger.critical('invalid identifier: %s', identifier)
         return
         
     if(args.key == None):
@@ -115,14 +121,18 @@ def config_read(args):
             key = args.key
             value = object.get(key)
         except KeyError:
-            print "{} is not a valid key".format(key)
+            logger.critical('invalid key: %s', key)
             return
             
         _read(identifier, key, value)
+    
+    bot.init(runlevel.HALT)
 
 def config_write(args):
-    bot = Bot()
+    bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
+    
+    logger = bot.get_logger('tools.config') 
     
     identifier = args.identifier
     key = args.key
@@ -133,10 +143,10 @@ def config_write(args):
         object = bot.get_config(identifier)
         
     except KeyError:
-        print "{} is not a valid identifier".format(identifier)
+        logger.critical('invalid identifier: %s', identifier)
         
     if key not in object.valid_keys():
-        print "{} is not a valid key".format(key)
+        logger.critical('invalid key: %s', key)
         return
         
     
@@ -157,7 +167,10 @@ def config_write(args):
     
     object.set(key, new_value)
     object.save()
-
+    
+    logger.info('%s.%s set to %s', identifier, key, new_value)
+    
+    bot.init(runlevel.HALT)
 
 if __name__ == '__main__':
     parseargs()
