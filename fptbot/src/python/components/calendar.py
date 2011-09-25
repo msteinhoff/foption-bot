@@ -27,6 +27,7 @@ THE SOFTWARE.
 @since Mar 12, 2011
 @author Mario Steinhoff
 """
+from gdata.analytics.data import Destination
 __version__ = '$Rev$'
 
 import datetime
@@ -36,8 +37,9 @@ import atom.data
 import gdata.calendar.data
 
 from core import runlevel
+from core.config import Config
 from core.component import Component, ComponentError
-from objects.calendar import Calendar, Event, Backend,\
+from objects.calendar import Calendar, Event, Contact, Backend,\
     CalendarPeerIdentity, EventPeerIdentity, ContactPeerIdentity
 
 # ------------------------------------------------------------------------------
@@ -52,13 +54,16 @@ class InvalidObjectId(CalendarComponentError): pass
 class CalendarComponent(Component):
     RUNLEVEL = runlevel.Runlevel(
         autoboot=True,
-        minimum_start=runlevel.LOCAL_SERVICE
+        minimum_start=runlevel.LOCAL_COMPONENT
     )
     
     def __init__(self, bot):
         Component.__init__(self, bot)
         
+        self.bot.register_config(CalendarComponentConfig)
+        
         self.logger = self.bot.get_logger('components.calendar')
+        self.config = self.bot.get_config('components.calendar')
         
         self.datastore = None
     
@@ -121,14 +126,10 @@ class CalendarComponent(Component):
         if object.id == None:
             raise ValueError('object.id must be given')
         
-        try:
-            self.datastore.update_object(
-                self.__class__.__name__,
-                object
-            )
-        
-        except KeyError:
-            raise InvalidObjectId
+        self.datastore.update_object(
+            self.__class__.__name__,
+            object
+        )
         
     def delete_object(self, object):
         if object == None:
@@ -137,14 +138,10 @@ class CalendarComponent(Component):
         if object.id == None:
             raise ValueError('object.id must be given')
         
-        try:
-            self.datastore.delete_object(
-                self.__class__.__name__,
-                object
-            )
-        
-        except KeyError:
-            raise InvalidObjectId
+        self.datastore.delete_object(
+            self.__class__.__name__,
+            object
+        )
     
     # --------------------------------------------------------------------------
     # Component methods: calendars
@@ -233,11 +230,24 @@ class CalendarComponent(Component):
         
         return self.datastore.find_objects(query)
 
+class CalendarComponentConfig(Config):
+    identifier = 'components.calendar'
+        
+    def valid_keys(self):
+        return [
+            'defaultCalendarId'
+        ]
+    
+    def default_values(self):
+        return {
+            'defaultCalendarId' : None
+        }
+
+
 # ------------------------------------------------------------------------------
 # Data management
 # ------------------------------------------------------------------------------
 class DataStoreError(CalendarComponentError): pass
-class ObjectNotFound(DataStoreError): pass
 class InvalidQueryName(DataStoreError): pass
 
 class DataStore():
@@ -341,59 +351,6 @@ class DataStore():
         
         self.strategy.delete(source, object)
 
-class DataStoreQuery(object):
-    """
-    An abstract data store query.
-    
-    This object only contains the general name of the specific query.
-    Arbitrary query parameters can be added at runtime. When the query is run
-    against the backends, the name is used to identify the concrete query
-    objects provided by the backends.
-    """
-    
-    def __init__(self, name):
-        """
-        Instantiate a new query object.
-        
-        @param name: The query name.
-        """
-        
-        self.__query_name = name
-        
-    def get_name(self):
-        """
-        Return the query name.
-        
-        @return The query name.
-        """
-        
-        return self.__query_name
-    
-    def get_parameters(self):
-        """
-        Return a dictionary with query parameters.
-        
-        @return A dictionary with query parameters.
-        """
-        
-        # TODO filter private attributes
-        return self.__dict__
-
-class DataStorePeerIdentity(object):
-    """
-    A storage-idenpendent, backend-specific identity for a given entity.
-    """
-    
-    def __init__(self, backend=None, type=None, identity=None):
-        """
-        @param backend: The classname of the backend.
-        @param type: The classname of the entity type.
-        @param identity: The entity identity.
-        """
-        self.backend = backend
-        self.type = type
-        self.identity = identity
-
 class DataStoreSyncStrategy(object):
     """
     Abstract implementation for backend all synchronization strategies.
@@ -454,20 +411,23 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         primary = self.datastore.primary_backend
         secondaries = self.datastore.secondary_backends
         
-        primary.begin_transaction()
-        
-        stored_object = primary.insert_object(object)
-        
-        for secondary in secondaries:
-            datastore_identity = secondary.insert_object(object)
+        try:
+            stored_object = primary.insert_object(object)
             
-            primary.create_peer_identity(
-                stored_object,
-                datastore_identity
-            )
-        
-        primary.commit_transaction()
+            for secondary in secondaries:
+                datastore_identity = secondary.insert_object(object)
+                
+                primary.create_peer_identity(
+                    stored_object,
+                    datastore_identity
+                )
             
+            primary.commit_transaction()
+        
+        except:
+            primary.rollback_transaction()
+            raise
+        
         return stored_object
         
     def update(self, source, object):
@@ -481,26 +441,31 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         primary = self.datastore.primary_backend
         secondaries = self.datastore.secondary_backends
         
-        primary.begin_transaction()
+        try:
+            primary.update_object(object)
+            
+            datastore_ids = {}
+            
+            for identity in object.identities:
+                datastore_id = DataStorePeerIdentity(
+                    backend=identity.backend.typename,
+                    type=identity.typename,
+                    identity=identity.identity
+                )
+                
+                datastore_ids[identity.backend.typename] = datastore_id
+            
+            for secondary in secondaries:
+                secondary.update_object(
+                    datastore_ids[secondary.__class__.__name__],
+                    object
+                )
+            
+            primary.commit_transaction()
         
-        primary.update_object(object)
-        
-        datastore_identities = {}
-        
-        for identity in object.identities:
-            datastore_identities[identity.backend.name] = DataStorePeerIdentity(
-                backend=identity.backend.name,
-                type=identity.data_type,
-                identity=identity.identity
-            )
-        
-        for secondary in secondaries:
-            secondary.update_object(
-                datastore_identities[secondary.__class__.__name__],
-                object
-            )
-        
-        primary.commit_transaction()
+        except:
+            primary.rollback_transaction()
+            raise
     
     def delete(self, source, object):
         """
@@ -513,25 +478,30 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         primary = self.datastore.primary_backend
         secondaries = self.datastore.secondary_backends
         
-        primary.begin_transaction()
-        
-        datastore_identities = {}
-        
-        for identity in object.identities:
-            datastore_identities[identity.backend.name] = DataStorePeerIdentity(
-                backend=identity.backend.name,
-                type=identity.data_type,
-                identity=identity.identity
-            )
-        
-        for secondary in secondaries:
-            secondary.delete_object(
-                datastore_identities[secondary.__class__.__name__]
-            )
+        try:
+            datastore_ids = {}
             
-        primary.delete_object(object)
+            for identity in object.identities:
+                datastore_id = DataStorePeerIdentity(
+                    backend=identity.backend.name,
+                    type=identity.typename,
+                    identity=identity.identity
+                )
+                
+                datastore_ids[identity.backend.typename] = datastore_id
+            
+            for secondary in secondaries:
+                secondary.delete_object(
+                    datastore_ids[secondary.__class__.__name__]
+                )
         
-        primary.commit_transaction()
+            primary.delete_object(object)
+            
+            primary.commit_transaction()
+        
+        except:
+            primary.rollback_transaction()
+            raise
 
 class DataStoreTwoWaySync(DataStoreSyncStrategy):
     """
@@ -575,6 +545,59 @@ class DataStoreTwoWaySync(DataStoreSyncStrategy):
         """
         
         pass
+
+class DataStoreQuery(object):
+    """
+    An abstract data store query.
+    
+    This object only contains the general name of the specific query.
+    Arbitrary query parameters can be added at runtime. When the query is run
+    against the backends, the name is used to identify the concrete query
+    objects provided by the backends.
+    """
+    
+    def __init__(self, name):
+        """
+        Instantiate a new query object.
+        
+        @param name: The query name.
+        """
+        
+        self.__query_name = name
+        
+    def get_name(self):
+        """
+        Return the query name.
+        
+        @return The query name.
+        """
+        
+        return self.__query_name
+    
+    def get_parameters(self):
+        """
+        Return a dictionary with query parameters.
+        
+        @return A dictionary with query parameters.
+        """
+        
+        # TODO filter private attributes
+        return self.__dict__
+
+class DataStorePeerIdentity(object):
+    """
+    A storage-idenpendent, backend-specific identity for a given entity.
+    """
+    
+    def __init__(self, backend=None, type=None, identity=None):
+        """
+        @param backend: The classname of the backend.
+        @param type: The classname of the entity type.
+        @param identity: The entity identity.
+        """
+        self.backend = backend
+        self.type = type
+        self.identity = identity
 
 class DataStoreBackend(object):
     """
@@ -629,37 +652,109 @@ class SqlAlchemyBackend(DataStoreBackend):
     """
     
     class Query(DataStoreBackend.Query):
+        def __with_deleted(self, query):
+            """
+            Return if the result should contain entries marked as deleted.
+            
+            @param query: The DataStoreQuery to check.
+            
+            @return True if deleted entries are requested, otherwise False.
+            """
+            return (hasattr(query, 'with_deleted') and query.with_deleted)
+        
         def all_calendars(self, session, query):
-            result = session.query(Calendar).filter(Calendar.isDeleted == False).all()
+            """
+            @return All calendar objects.
+            """
+            
+            result = session \
+                   .query(Calendar) \
+                   .filter(Calendar.isDeleted == self.__with_deleted(query)) \
+                   .all()
             
             return result
         
         def calendar_by_id(self, session, query):
-            raise ObjectNotFound
+            """
+            @return A single calendar object with the id of query.id.
+            """
+            
+            try:
+                result = session \
+                       .query(Calendar) \
+                       .filter(Calendar.id == query.id) \
+                       .filter(Calendar.isDeleted == self.__with_deleted(query)) \
+                       .one()
+                
+            except sqlalchemy.orm.exc.NoResultFound:
+                result = []
+            
+            return result
         
         def calendars_by_string(self, session, query):
-            return []
+            """
+            @return Calendar objects where the name contains the query.string.
+            """
+            
+            result = session \
+                   .query(Calendar) \
+                   .filter(Calendar.title.contains(query.string)) \
+                   .filter(Event.isDeleted == self.__with_deleted(query)) \
+                   .all()
+                   
+            return result
         
         def all_events(self, session, query):
-            return []
+            """
+            @return All event objects.
+            """
+            
+            result = session \
+                   .query(Event) \
+                   .filter(Event.isDeleted == self.__with_deleted(query)) \
+                   .all()
+            
+            return result
         
         def event_by_id(self, session, query):
+            """
+            @return A single event object with the id of query.id
+            """
+            
             try:
                 result = session \
                        .query(Event) \
                        .filter(Event.id == query.id) \
-                       .filter(Event.isDeleted == False) \
+                       .filter(Event.isDeleted == self.__with_deleted(query)) \
                        .one()
                 
             except sqlalchemy.orm.exc.NoResultFound:
-                raise ObjectNotFound
+                result = []
             
             return result
         
         def events_by_string(self, session, query):
-            return []
+            """
+            @return Event objects where the title, description or 
+                    location contain the query.string.
+            """
+            
+            result = session \
+                   .query(Event) \
+                   .filter(sqlalchemy.or_( \
+                        Event.title.contains(query.string), \
+                        Event.description.contains(query.string), \
+                        Event.location.contains(query.string) \
+                    )) \
+                   .filter(Event.isDeleted == self.__with_deleted(query)) \
+                   .all()
+                   
+            return result
         
         def events_at_date(self, session, query):
+            """
+            @return Event objects that lie between query.start and query.end.
+            """
             
             result = session \
                    .query(Event) \
@@ -671,13 +766,48 @@ class SqlAlchemyBackend(DataStoreBackend):
             return result
         
         def all_contacts(self, session, query):
-            return []
+            """
+            @return All contact objects.
+            """
+            
+            result = session.query(Contact).filter(Contact.isDeleted == False).all()
+            
+            return result
         
         def contact_by_id(self, session, query):
-            raise ObjectNotFound
+            """
+            @return A single contact object with the id of query.id.
+            """
+            
+            try:
+                result = session \
+                       .query(Contact) \
+                       .filter(Contact.id == query.id) \
+                       .filter(Contact.isDeleted == False) \
+                       .one()
+                
+            except sqlalchemy.orm.exc.NoResultFound:
+                result = []
+            
+            return result
         
         def contacts_by_string(self, session, query):
-            return []
+            """
+            @return Contact objects where the firstname, lastname or
+                    nickname contain the query.string.
+            """
+            
+            result = session \
+                   .query(Contact) \
+                   .filter(sqlalchemy.or_( \
+                        Contact.firstname.contains(query.string), \
+                        Contact.lastname.contains(query.string), \
+                        Contact.nickname.contains(query.string) \
+                    )) \
+                   .filter(Event.isDeleted == False) \
+                   .all()
+                   
+            return result
     
     def __init__(self, datastore, persistence):
         """
@@ -700,17 +830,24 @@ class SqlAlchemyBackend(DataStoreBackend):
     
     def commit_transaction(self):
         """
-        Commit the current transaction.
+        Commit the session's transaction.
         """
         
         self.session.commit()
     
-    def request_backend(self, name):
+    def rollback_transaction(self):
+        """
+        Rollback the session's transaction.
+        """
+        
+        self.session.rollback()
+    
+    def request_backend(self, typename):
         """
         Request a backend object from the database.
         When the object was not found, a new object will be created.
         
-        @param name: The name of the backend.
+        @param typename: The typename of the backend.
         
         @return A Backend instance.
         """
@@ -718,11 +855,11 @@ class SqlAlchemyBackend(DataStoreBackend):
         try:
             backend = self.session \
                     .query(Backend) \
-                    .filter(Backend.name == name) \
+                    .filter(Backend.typename == typename) \
                     .one()
                     
         except sqlalchemy.orm.exc.NoResultFound:
-            backend = Backend(name=name)
+            backend = Backend(typename=typename)
             
             self.session.add(backend)
         
@@ -822,7 +959,6 @@ class SqlAlchemyBackend(DataStoreBackend):
         """
         
         object.isDeleted = True
-        object.deletedOn = datetime.datetime.now()
 
 class GoogleBackend(DataStoreBackend):
     """
@@ -830,13 +966,32 @@ class GoogleBackend(DataStoreBackend):
     """
     
     class Query(DataStoreBackend.Query):
+        def all_calendars_feed(self, service, query):
+            """
+            @return An atom feed with all calendar objects.
+            """
+            
+            return service.calendar_client.GetOwnCalendarsFeed()
+        
         def calendar_by_id(self, service, query):
+            """
+            @return A single calendar object with the id of query.id.
+            """
+            
             return service.calendar_client.get_calendar_entry(uri=query.id)
         
         def event_by_id(self, service, query):
+            """
+            @return A single event object with the id of query.id.
+            """
+            
             return service.calendar_client.get_event_entry(uri=query.id)
         
         def contact_by_id(self, service, query):
+            """
+            @return A single contact object with the id of query.id.
+            """
+            
             return service.contacts_client.get_contact(uri=query.id)
     
     class Adapter(DataStoreBackend.Adapter):
@@ -963,7 +1118,6 @@ class GoogleBackend(DataStoreBackend):
             
             entry = self._event_to_gdata(object, entry)
             
-            """ TODO catch errors """
             new_entry = service.calendar_client.InsertEvent(entry)
             
             identity = self.new_identity()
@@ -975,11 +1129,9 @@ class GoogleBackend(DataStoreBackend):
         def update(self, service, gdata_entry, object):
             updated_entry = self._event_to_gdata(object, gdata_entry)
             
-            """ TODO catch errors """
             service.calendar_client.Update(updated_entry)
         
         def delete(self, service, gdata_entry):
-            """ TODO catch errors """
             service.calendar_client.Delete(gdata_entry)
     
     class ContactAdapter(Adapter):

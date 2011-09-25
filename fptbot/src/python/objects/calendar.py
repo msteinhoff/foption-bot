@@ -30,11 +30,17 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text
+import datetime
+
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text, Enum
 from sqlalchemy.schema import ForeignKey
 from sqlalchemy.orm import relationship, backref
 
 from core.persistence import SqlAlchemyPersistence
+
+def set_deletion_date(context):
+    if 'isDeleted' in context.current_parameters and context.current_parameters['isDeleted'] == True:
+        return datetime.datetime.now()
 
 #-------------------------------------------------------------------------------
 # Calendar
@@ -44,23 +50,26 @@ class Calendar(SqlAlchemyPersistence.Base):
     Represent a calendar for the calendar component.
     """
     
-    AUTO = 1
-    MANUAL = 2
+    BASIC = 'basic'
+    MANAGED = 'managed'
     
     __tablename__ = 'calendars'
     
     # DDL
     id = Column(Integer, primary_key=True)
     isDeleted = Column(Boolean, default=False)
-    deletedOn = Column(DateTime, nullable=True)
+    deletedOn = Column(DateTime, nullable=True, onupdate=set_deletion_date)
     
-    name = Column(String(255))
-    type = Column(Integer)
+    title = Column(String(255))
+    summary = Column(Text)
+    location = Column(String(255))
+    color = Column(String(6))
+    type = Column(Enum(BASIC, MANAGED), default=BASIC)
     
     def __repr__(self):
-        return '<Calendar(id={0},name={1}|type={2})>'.format(
+        return '<Calendar(id={0},title={1}|type={2})>'.format(
             self.id, 
-            self.name, 
+            self.title,
             self.type
         )
 
@@ -74,10 +83,9 @@ class Event(SqlAlchemyPersistence.Base):
     # DDL
     id = Column(Integer, primary_key=True)
     isDeleted = Column(Boolean, default=False)
-    deletedOn = Column(DateTime, nullable=True)
+    deletedOn = Column(DateTime, nullable=True, onupdate=set_deletion_date)
     
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
-    etag = Column(String(255), nullable=True)
     start = Column(DateTime)
     end = Column(DateTime)
     allday = Column(Boolean, default=False)
@@ -86,16 +94,14 @@ class Event(SqlAlchemyPersistence.Base):
     location = Column(String(255), nullable=True)
     
     # ORM
-    calendar = relationship('Calendar', backref=backref('events'), order_by=id)
+    calendar = relationship('Calendar', backref=backref('events'))
     
     def __repr__(self):
-        return '<Event(id={0}|calendar={1}|etag={2}|start={3}|end={4}|title={5})>'.format(
-            self.id, 
-            self.calendar, 
-            self.etag, 
-            self.start, 
-            self.end, 
-            self.title
+        return '<Event(id={0}|start={1}|end={2}|title={3})>'.format(
+            self.id,
+            self.title,
+            self.start,
+            self.end
         )
 
 class Contact(SqlAlchemyPersistence.Base):
@@ -110,7 +116,7 @@ class Contact(SqlAlchemyPersistence.Base):
     # DDL
     id = Column(Integer, primary_key=True)
     isDeleted = Column(Boolean, default=False)
-    deletedOn = Column(DateTime, nullable=True)
+    deletedOn = Column(DateTime, nullable=True, onupdate=set_deletion_date)
 
     firstname = Column(String(64), nullable=True)
     lastname = Column(String(64), nullable=True)
@@ -119,17 +125,16 @@ class Contact(SqlAlchemyPersistence.Base):
     
     def __repr__(self):
         return '<Contact(id={0}|firstname={1}|lastname={2}|nickname={3}|birthday={4})>'.format(
-            self.id, 
-            self.firstname, 
-            self.lastname, 
-            self.nickname, 
+            self.id,
+            self.firstname,
+            self.lastname,
+            self.nickname,
             self.birthday
         )
 
 #-------------------------------------------------------------------------------
 # Backend mapping
 #-------------------------------------------------------------------------------
-
 class Backend(SqlAlchemyPersistence.Base):
     """
     Represents a secondary backend.
@@ -139,6 +144,14 @@ class Backend(SqlAlchemyPersistence.Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(64))
+    typename = Column(String(255))
+    
+    def __repr__(self):
+        return '<Backend(id={0}|name={1}|classname={2})>'.format(
+            self.id,
+            self.name,
+            self.typename
+        )
 
 class BackendPeerIdentity(SqlAlchemyPersistence.Base):
     """
@@ -150,48 +163,54 @@ class BackendPeerIdentity(SqlAlchemyPersistence.Base):
     +-- EventPeerIdentity
     +-- ContactPeerIdentity
     """
+    
     __tablename__ = 'backend_identity'
     
     identity = Column(String(255), primary_key=True)
     backend_id = Column(Integer, ForeignKey('backends.id'))
-    data_type = Column(String(64))
+    version = Column(String(255), nullable=True)
+    typename = Column(String(255))
     
     backend = relationship('Backend')
     
     __mapper_args__ = {
-       'polymorphic_on': data_type
+       'polymorphic_on': typename
    }
+    
+    def __repr__(self):
+        return '<BackendPeerIdentity(identity={0}|typename={2},version={3})>'.format(
+            self.identity,
+            self.typename,
+            self.version
+        )
 
 class CalendarPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
        'polymorphic_identity': 'Calendar'
     }
-
-    calendar_id = Column(Integer, ForeignKey('calendars.id'))
-    calendar = relationship('Calendar', backref=backref('identities', order_by=BackendPeerIdentity.backend_id, cascade="all, delete-orphan"))
     
+    calendar_id = Column(Integer, ForeignKey('calendars.id'))
+    calendar = relationship('Calendar', backref=backref('identities', order_by=BackendPeerIdentity.backend_id, cascade="all, delete-orphan"))    
 
 class EventPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
        'polymorphic_identity': 'Event'
     }
-
+    
     event_id = Column(Integer, ForeignKey('events.id'))
-    event = relationship('Event', backref=backref('identities', order_by=BackendPeerIdentity.backend_id))
+    event = relationship('Event', backref=backref('identities', order_by=BackendPeerIdentity.backend_id, cascade="all, delete-orphan"))
 
 class ContactPeerIdentity(BackendPeerIdentity):
     __mapper_args__ = {
        'polymorphic_identity': 'Contact'
     }
-
+    
     contact_id = Column(Integer, ForeignKey('contacts.id'))
-    contact = relationship('Contact', backref=backref('identities', order_by=BackendPeerIdentity.backend_id))
-
+    contact = relationship('Contact', backref=backref('identities', order_by=BackendPeerIdentity.backend_id, cascade="all, delete-orphan"))
 
 #-------------------------------------------------------------------------------
 # Auditing
 #-------------------------------------------------------------------------------
-
 class AuditEntry(SqlAlchemyPersistence.Base):
     """
     Represent an audit entry for the calendar component.
