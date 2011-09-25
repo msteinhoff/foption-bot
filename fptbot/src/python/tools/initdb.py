@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: UTF-8 -*-
 """
 $Id$
@@ -36,10 +35,7 @@ from core.bot import Bot
 from core.persistence import SqlAlchemyPersistence
 
 # Load all table definitions
-import objects.principal
-import objects.irc
-import objects.calendar
-import objects.facts
+import objects
 
 if __name__ == '__main__':
     bot = Bot()
