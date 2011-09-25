@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import sqlite3
 import gdata.calendar.client
 import gdata.contacts.client
@@ -130,7 +131,7 @@ class SqlitePersistence(subsystem.Subsystem):
 class SqlAlchemyPersistence(subsystem.Subsystem):
     RUNLEVEL = runlevel.Runlevel(
         autoboot=True,
-        minimum_start=runlevel.LOCAL_FILESYSTEM
+        minimum_start=runlevel.LOCAL_SERVICE
     )
     
     """
@@ -147,9 +148,9 @@ class SqlAlchemyPersistence(subsystem.Subsystem):
         """
         subsystem.Subsystem.__init__(self, bot)
         
-        self.engine = create_engine(connect_string, echo=True)
-        self.sessionobj = sessionmaker(bind=self.engine, autoflush=True, autocommit=False)
-        self.session = None
+        self.connect_string = connect_string
+        
+        bot.get_logger('sqlalchemy.engine').setLevel(logging.INFO)
     
     def _start(self):
         """
@@ -158,8 +159,21 @@ class SqlAlchemyPersistence(subsystem.Subsystem):
         Implementation of Subsystem.start()
         """
         
-        if self.session == None:
-            self.session = self.sessionobj()
+        if not self.connect_string:
+            raise KeyError('missing connect string')
+        
+        if self.connect_string.startswith('config:'):
+            config_fqdn = self.connect_string.split(':')[1].split('.')
+            identifier = '.'.join(config_fqdn[:-1])
+            key = '.'.join(config_fqdn[-1:])
+            
+            connect_string = self.bot.get_config(identifier).get(key)
+        else:
+            connect_string = self.connect_string
+        
+        self.engine = create_engine(connect_string)
+        self.sessionobj = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+        self.session = self.sessionobj()
         
         self._running()
         

@@ -52,7 +52,7 @@ class FactsComponentError(ComponentError): pass
 class FactsComponent(Component):
     RUNLEVEL = runlevel.Runlevel(
         autoboot=True,
-        minimum_start=runlevel.NETWORK_SERVICE
+        minimum_start=runlevel.LOCAL_COMPONENT
     )
     
     def __init__(self, bot):

@@ -53,12 +53,12 @@ class Bot(object):
     Provide general functionality and start all subsystems.
     """
     
-    def __init__(self):
+    def __init__(self, level=logging.DEBUG):
         """
         Initialize the bot.
         """
         
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=level)
         
         self.logger = self.get_logger()
         
@@ -73,7 +73,7 @@ class Bot(object):
         self.register_config(BotConfig)
         self.apply_logger_config()
         
-        self.register_subsystem('local-persistence', 'core.persistence.SqlAlchemyPersistence', connect_string=self.get_config('core.bot').get('database-connectstring'))
+        self.register_subsystem('local-persistence', 'core.persistence.SqlAlchemyPersistence', connect_string='config:core.bot.database-connectstring')
         self.register_subsystem('google-api-service', 'core.persistence.GoogleApiService')
         self.register_subsystem('principal-component', 'components.principal.PrincipalComponent')
         self.register_subsystem('calendar-component', 'components.calendar.CalendarComponent')
@@ -268,9 +268,17 @@ class Bot(object):
         """
         
         for identifier in self.__runlevel_map[requested]:
-            self.logger.info('trying to start subsystem: %s', identifier)
-            self._subsystems[identifier].start()
-            self.logger.info('subsystem started: %s', identifier)
+            if self._subsystems[identifier].get_state() != runlevel.STATE_HALTED:
+                self.logger.info('subsystem %s: skipped (not halted)', identifier)
+                continue
+            
+            try:
+                self.logger.info('subsystem %s: starting', identifier)
+                self._subsystems[identifier].start()
+                self.logger.info('subsystem %s: started', identifier)
+            except:
+                self.logger.exception('subsystem %s: start failed', identifier)
+
         
     def _stop_subsystems(self, requested):
         """
@@ -280,9 +288,17 @@ class Bot(object):
         """
         
         for identifier in self.__runlevel_map[requested]:
-            self.logger.info('trying to stop subsystem: %s', identifier)
-            self._subsystems[identifier].stop()
-            self.logger.info('subsystem stopped: %s', identifier)
+            if self._subsystems[identifier].get_state() != runlevel.STATE_RUNNING:
+                self.logger.info('subsystem %s: skipped (not running)', identifier)
+                continue
+            
+            try:
+                self.logger.info('subsystem %s: starting', identifier)
+                self._subsystems[identifier].stop()
+                self.logger.info('subsystem %s: started', identifier)
+            except:
+                self.logger.exception('subsystem %s: start failed', identifier)
+
     
 class BotConfig(Config):
     identifier = 'core.bot'

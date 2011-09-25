@@ -64,12 +64,7 @@ class Subsystem(object):
         if self.__state != runlevel.STATE_HALTED:
             raise SubsystemStateError('can not start subsystem %s: subsystem is not halted.'.format(self.__class__.__name__))
         
-        try:
-            self._start()
-        
-        except Exception:
-            logger = self.bot.get_logger()
-            logger.exception('Failed to start subsystem %s', self.__class__.__name__)
+        self._start()
     
     def stop(self):
         """
@@ -79,12 +74,7 @@ class Subsystem(object):
         if self.__state != runlevel.STATE_RUNNING:
             raise SubsystemStateError('can not stop subsystem %s: subsystem is not running.'.format(self.__class__.__name__))
         
-        try:
-            self._stop()
-        
-        except Exception:
-            logger = self.bot.get_logger()
-            logger.exception('Failed to stop subsystem %s', self.__class__.__name__)
+        self._stop()
     
     def _starting(self):
         """
@@ -111,6 +101,7 @@ class Subsystem(object):
         """
         Subsystem-internal method to indicate that the system is stopped.
         """
+        
         self.__state = runlevel.STATE_HALTED
     
     def get_state(self):

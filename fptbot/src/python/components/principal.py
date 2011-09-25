@@ -45,7 +45,7 @@ class PrincipalComponentError(ComponentError): pass
 class PrincipalComponent(Component):
     RUNLEVEL = runlevel.Runlevel(
         autoboot=True,
-        minimum_start=runlevel.LOCAL_SERVICE
+        minimum_start=runlevel.LOCAL_COMPONENT
     )
 
     def __init__(self, bot):
