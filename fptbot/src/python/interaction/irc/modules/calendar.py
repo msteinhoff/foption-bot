@@ -453,7 +453,7 @@ class Calendar(InteractiveModule):
         try:
             result = self.component.find_event_by_id(eventId)
             
-            if result == None:
+            if result is None:
                 raise EventNotFound
             
             reply.add_line('currently not implemented');

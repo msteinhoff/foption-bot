@@ -71,7 +71,7 @@ def config_init(args):
         object.init(object.default_values())
         object.save()
     
-    if args.identifier == None:
+    if args.identifier is None:
         for (identifier, object) in bot.get_configs().items():
             _init(identifier, object)
     
@@ -105,7 +105,7 @@ def config_read(args):
         logger.critical('invalid identifier: %s', identifier)
         return
         
-    if(args.key == None):
+    if(args.key is None):
         spacelist = [len(item) for item in object.get_all().keys()]
         
         if spacelist:

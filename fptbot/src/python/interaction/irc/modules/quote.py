@@ -86,7 +86,7 @@ class Quote():
 
     def rndQuote(self,String):
         IDs = self.searchQuote(String)
-        if (IDs == None):
+        if (IDs is None):
             return "15[QUOTE]: 7Kein Zitat gefunden mit '" + String + "'."
         else:
             ID = IDs.split(",")

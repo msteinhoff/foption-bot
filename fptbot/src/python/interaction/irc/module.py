@@ -441,7 +441,7 @@ class InteractiveModuleReply(object):
     def __init__(self, firstline=None):
         self.use_message()
         
-        if firstline == None:
+        if firstline is None:
             self.replies = []
         else:
             self.replies = [firstline]

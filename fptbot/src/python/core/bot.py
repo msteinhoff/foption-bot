@@ -114,7 +114,7 @@ class Bot(object):
         of 'core.bot' is used.
         """
         
-        if identifier == None:
+        if identifier is None:
             identifier = 'core.bot'
             
         return logging.getLogger(identifier)

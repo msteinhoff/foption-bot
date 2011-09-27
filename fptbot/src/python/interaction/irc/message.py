@@ -167,7 +167,7 @@ class Event(object):
         #-----------------------------------------------------------------------
         # Handle the source if existent
         #-----------------------------------------------------------------------
-        if self.source == None:
+        if self.source is None:
             prefix = ''
             
         else:
@@ -181,7 +181,7 @@ class Event(object):
         #-----------------------------------------------------------------------
         # Handle parameters
         #-----------------------------------------------------------------------
-        if self.parameter == None:
+        if self.parameter is None:
             paramlist = ''
             
         elif len(self.parameter) == 0:

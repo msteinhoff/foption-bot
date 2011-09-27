@@ -98,7 +98,7 @@ class Bombkick():
                 #[Bombs defused,Failed defused,[Bombs in a row,'+' or '-'],[aktive timer,colors,color],nick]
                 self.BombDB[Auth] = [0,0,[0,'+'],[None,[],""],'']
             
-            if (self.BombDB[Auth][3][0] == None):
+            if (self.BombDB[Auth][3][0] is None):
                 Bombtimer = Timer(20,self.fireBomb,[Auth])
                 Color, Colors = self.getColors()
                 

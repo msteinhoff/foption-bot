@@ -161,7 +161,7 @@ class Satz():
 
 
     def __getHistorySentence(self,ID=None):
-        if (ID != None):
+        if (ID is not None):
             return self.__SatzHistory[ID]
         else:
             ID = random.randint(1,len(self.__SatzHistory))
