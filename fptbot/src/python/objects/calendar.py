@@ -30,17 +30,12 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-import datetime
-
 from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Text, Enum
 from sqlalchemy.schema import ForeignKey
 from sqlalchemy.orm import relationship, backref
 
 from core.persistence import SqlAlchemyPersistence
-
-def set_deletion_date(context):
-    if 'isDeleted' in context.current_parameters and context.current_parameters['isDeleted'] == True:
-        return datetime.datetime.now()
+from objects import set_deletion_date
 
 #-------------------------------------------------------------------------------
 # Calendar
@@ -166,7 +161,7 @@ class BackendPeerIdentity(SqlAlchemyPersistence.Base):
     
     __tablename__ = 'backend_identity'
     
-    identity = Column(String(255), primary_key=True)
+    identity = Column(Text, primary_key=True)
     backend_id = Column(Integer, ForeignKey('backends.id'))
     version = Column(String(255), nullable=True)
     typename = Column(String(255))

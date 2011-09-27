@@ -37,3 +37,8 @@ __all__ = [
     'irc',
 ]
 
+import datetime
+
+def set_deletion_date(context):
+    if 'isDeleted' in context.current_parameters and context.current_parameters['isDeleted'] == True:
+        return datetime.datetime.now()

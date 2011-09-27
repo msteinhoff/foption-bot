@@ -27,14 +27,16 @@ THE SOFTWARE.
 @since Mar 12, 2011
 @author Mario Steinhoff
 """
-from gdata.analytics.data import Destination
+
 __version__ = '$Rev$'
 
 import datetime
+import json
 
 import sqlalchemy.orm.exc
 import atom.data
 import gdata.calendar.data
+import gdata.contacts.data
 
 from core import runlevel
 from core.config import Config
@@ -106,10 +108,10 @@ class CalendarComponent(Component):
     # Component methods: global
     # --------------------------------------------------------------------------
     def insert_object(self, object):
-        if object == None:
+        if object is None:
             raise ValueError('object must be given')
         
-        if object.id != None:
+        if object.id is not None:
             raise ValueError('object.id must be None')
         
         result = self.datastore.insert_object(
@@ -120,10 +122,10 @@ class CalendarComponent(Component):
         return result
         
     def update_object(self, object):
-        if object == None:
+        if object is None:
             raise ValueError('object must be given')
         
-        if object.id == None:
+        if object.id is None:
             raise ValueError('object.id must be given')
         
         self.datastore.update_object(
@@ -132,10 +134,10 @@ class CalendarComponent(Component):
         )
         
     def delete_object(self, object):
-        if object == None:
+        if object is None:
             raise ValueError('object must be given')
         
-        if object.id == None:
+        if object.id is None:
             raise ValueError('object.id must be given')
         
         self.datastore.delete_object(
@@ -152,7 +154,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_calendar_by_id(self, id):
-        if id == None:
+        if id is None:
             return None
         
         query = self.datastore.get_query('calendar_by_id')
@@ -161,7 +163,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_calendars_by_string(self, string):
-        if string == None:
+        if string is None:
             return None
         
         query = self.datastore.get_query('calendars_by_string')
@@ -178,7 +180,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_event_by_id(self, id):
-        if id == None:
+        if id is None:
             return None
         
         query = self.datastore.get_query('event_by_id')
@@ -187,7 +189,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_events_by_string(self, string):
-        if string == None:
+        if string is None:
             return None
         
         query = self.datastore.get_query('events_by_string')
@@ -196,7 +198,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_events_at_date(self, date):
-        if date == None:
+        if date is None:
             return None
         
         query = self.datastore.get_query('events_at_date')
@@ -213,7 +215,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_contact_by_id(self, id):
-        if id == None:
+        if id is None:
             return None
         
         query = self.datastore.get_query('contacts_by_id')
@@ -222,7 +224,7 @@ class CalendarComponent(Component):
         return self.datastore.find_objects(query)
     
     def find_contacts_by_string(self, string):
-        if string == None:
+        if string is None:
             return None
         
         query = self.datastore.get_query('contacts_by_string')
@@ -760,7 +762,7 @@ class SqlAlchemyBackend(DataStoreBackend):
                    .query(Event) \
                    .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.start) <= query.date) \
                    .filter(sqlalchemy.func.strftime('%Y-%m-%d', Event.end) >= query.date) \
-                   .filter(Event.isDeleted == False) \
+                   .filter(Event.isDeleted == self.__with_deleted(query)) \
                    .all()
             
             return result
@@ -770,7 +772,7 @@ class SqlAlchemyBackend(DataStoreBackend):
             @return All contact objects.
             """
             
-            result = session.query(Contact).filter(Contact.isDeleted == False).all()
+            result = session.query(Contact).filter(Contact.isDeleted == self.__with_deleted(query)).all()
             
             return result
         
@@ -783,7 +785,7 @@ class SqlAlchemyBackend(DataStoreBackend):
                 result = session \
                        .query(Contact) \
                        .filter(Contact.id == query.id) \
-                       .filter(Contact.isDeleted == False) \
+                       .filter(Contact.isDeleted == self.__with_deleted(query)) \
                        .one()
                 
             except sqlalchemy.orm.exc.NoResultFound:
@@ -804,7 +806,7 @@ class SqlAlchemyBackend(DataStoreBackend):
                         Contact.lastname.contains(query.string), \
                         Contact.nickname.contains(query.string) \
                     )) \
-                   .filter(Event.isDeleted == False) \
+                   .filter(Event.isDeleted == self.__with_deleted(query)) \
                    .all()
                    
             return result
@@ -965,6 +967,9 @@ class GoogleBackend(DataStoreBackend):
     Backend implementation using Google's GData API.
     """
     
+    LINK_EDIT = 'edit'
+    LINK_EVENTFEED = 'http://schemas.google.com/gCal/2005#eventFeed'
+    
     class Query(DataStoreBackend.Query):
         def all_calendars_feed(self, service, query):
             """
@@ -995,10 +1000,14 @@ class GoogleBackend(DataStoreBackend):
             return service.contacts_client.get_contact(uri=query.id)
     
     class Adapter(DataStoreBackend.Adapter):
+        """
+        Abstract implementation for manipulation of GData entries.
+        """
+        
         date_format_time = '%Y-%m-%dT%H:%M:%S.000Z'
         date_format_allday = '%Y-%m-%d'
     
-        def _hastime(self, object):
+        def hastime(self, object):
             """
             Check if the given datetime object contains time.
             
@@ -1013,12 +1022,192 @@ class GoogleBackend(DataStoreBackend):
             
             return False
         
-        def _event_to_gdata(self, local_object, gdata_object):
+        def new_identity(self):
             """
-            Copy data from a local event object to a gdata event object.
+            Create a new DataStorePeerIdentity object.
             
-            @param local_object: The local event object.
-            @param gdata_object: The gdata event object.
+            @return A DataStorePeerIdentity instance from the GoogleBackend.
+            """
+            
+            identity = DataStorePeerIdentity()
+            identity.backend = 'GoogleBackend'
+            
+            return identity
+        
+        def json_links(self, gdata_object):
+            """
+            Convert data from a atom.Link list into a JSON string.
+            
+            @param gdata_object: The GData object containing the links.
+            
+            @return A link.rel=>link.href dict in JSON.
+            """
+            
+            list  = {}
+            
+            for link in gdata_object.link:
+                if link.rel is None or link.href is None:
+                    continue
+                
+                list[link.rel] = link.href
+                
+            result = json.dumps(list)
+            
+            return result
+            
+    class CalendarEntryAdapter(Adapter):
+        """
+        Manipulate GData CalendarEntry objects.
+        """
+        
+        def _local_to_gdata(self, local_object, gdata_object):
+            """
+            Update a GData instance with data from a local instance.
+            
+            @param local_object: An objects.Calendar instance.
+            @param gdata_object: An gdata.contacts.data.CalendarEntry instance.
+            
+            @return The updated gdata_object.
+            """
+            
+            #-----------------------------------------------------------------------
+            # Calendar: title
+            #-----------------------------------------------------------------------
+            if local_object.title:
+                if gdata_object.title:
+                    gdata_object.title.text = local_object.title
+                else:
+                    gdata_object.title = atom.data.Title(text=local_object.title)
+            
+            #-----------------------------------------------------------------------
+            # Calendar: summary
+            #-----------------------------------------------------------------------
+            if local_object.summary:
+                if gdata_object.summary:
+                    gdata_object.summary.text = local_object.summary
+                else:
+                    gdata_object.summary = atom.data.Summary(text=local_object.summary)
+            
+            #-----------------------------------------------------------------------
+            # Calendar: timezone
+            #-----------------------------------------------------------------------
+            # TODO: default timezone configurable
+            if gdata_object.timezone is None:
+                gdata_object.timezone = gdata.calendar.data.TimeZoneProperty(value='Europe/Berlin')
+            
+            #-----------------------------------------------------------------------
+            # Calendar: where
+            #-----------------------------------------------------------------------
+            # TODO: default location configurable
+            if local_object.location:
+                if len(gdata_object.where) > 0:
+                    # TODO: bad implementation, unclear specification from google
+                    # TODO: assume where always contains only one element with index 0
+                    gdata_object.where[0].value = local_object.location
+                    
+                else:
+                    where = gdata.calendar.data.CalendarWhere(
+                        value=local_object.location
+                    )
+                    
+                    gdata_object.where.append(where)
+            
+            else:
+                if len(gdata_object.where) == 0:
+                    where = gdata.calendar.data.CalendarWhere(
+                        value='Duesseldorf, Germany'
+                    )
+                    
+                    gdata_object.where.append(where)
+            
+            #-----------------------------------------------------------------------
+            # Calendar: color
+            #-----------------------------------------------------------------------
+            if local_object.color:
+                color = '#{0}'.format(local_object.color)
+                
+                if gdata_object.color:
+                    gdata_object.color.value = color
+                else:
+                    gdata_object.color = gdata.calendar.data.ColorProperty(value=color)
+            
+            else:
+                # TODO: default color configurable
+                color = '#000000'
+                
+                if gdata_object.color is None:
+                    gdata_object.color = gdata.calendar.data.ColorProperty(value=color)
+                    
+            
+            return gdata_object
+        
+        def _gdata_to_local(self, local_object, gdata_object):
+            """
+            Update a local instance with data from a GData instance.
+            
+            @param local_object: An objects.Calendar instance.
+            @param gdata_object: An gdata.contacts.data.CalendarEntry instance.
+            
+            @return The updated local_object.
+            """
+            
+            return local_object
+        
+        def insert(self, service, local_object):
+            """
+            Insert a local object into the Google Service.
+            
+            @param service: The Google API service.
+            @param local_object: An objects.Calendar instance.
+            
+            @return a DataStorePeerIdentity with information about the 
+                    new Google Entry. 
+            """
+            
+            entry = gdata.calendar.data.CalendarEntry()
+            
+            entry = self._local_to_gdata(local_object, entry)
+            
+            new_entry = service.calendar_client.InsertCalendar(entry)
+            
+            identity = self.new_identity()
+            identity.type = 'Calendar'
+            identity.identity = self.json_links(new_entry)
+            
+            return identity
+        
+        def update(self, service, gdata_object, local_object):
+            """
+            Update an existing object in Google with data from a local object.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.CalendarEntry. 
+            @param local_object: An objects.Calendar instance.
+            """
+            
+            updated_entry = self._local_to_gdata(local_object, gdata_object)
+            
+            service.calendar_client.Update(updated_entry)
+        
+        def delete(self, service, gdata_object):
+            """
+            Delete an existing object from the Google Services.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.CalendarEntry.
+            """
+            
+            service.calendar_client.Delete(gdata_object)
+    
+    class CalendarEventEntryAdapter(Adapter):
+        def _local_to_gdata(self, local_object, gdata_object):
+            """
+            Update a GData instance with data from a local instance.
+            
+            @param local_object: An objects.Event instance.
+            @param gdata_object: An gdata.contacts.data.CalendarEventEntry instance.
+            
+            @return The updated gdata_object.
             """
             
             #-----------------------------------------------------------------------
@@ -1045,8 +1234,7 @@ class GoogleBackend(DataStoreBackend):
             if len(gdata_object.where) > 0:
                 # TODO: bad implementation, unclear specification from google
                 # TODO: assume where always contains only one element with index 0
-                where = gdata_object.where[0]
-                where.value = local_object.location
+                gdata_object.where[0].value = local_object.location
                 
             else:
                 where = gdata.calendar.data.CalendarWhere(
@@ -1058,9 +1246,9 @@ class GoogleBackend(DataStoreBackend):
             #-----------------------------------------------------------------------
             # Event: when
             #-----------------------------------------------------------------------
-            if self._hastime(local_object.start) and self._hastime(local_object.end):
+            if self.hastime(local_object.start) and self.hastime(local_object.end):
                 date_format = self.date_format_time
-            elif not self._hastime(local_object.start) and not self._hastime(local_object.end):
+            elif not self.hastime(local_object.start) and not self.hastime(local_object.end):
                 date_format = self.date_format_allday
             else:
                 raise ValueError('start/end date: mixing of datetime and date is not allowed. start={0}, end={1}'.format(local_object.start, local_object.end))
@@ -1095,54 +1283,135 @@ class GoogleBackend(DataStoreBackend):
                 gdata_object.when.append(when)
             
             return gdata_object
-    
-        def new_identity(self):
-            identity = DataStorePeerIdentity()
-            identity.backend = 'GoogleBackend'
+        
+        def _gdata_to_local(self, local_object, gdata_object):
+            """
+            Update a local instance with data from a GData instance.
             
-            return identity
-    
-    class CalendarAdapter(Adapter):
-        def insert(self, service, object):
-            pass
+            @param local_object: An objects.Contact instance.
+            @param gdata_object: An gdata.contacts.data.CalendarEventEntry instance.
+            
+            @return The updated local_object.
+            """
+            
+            return local_object
         
-        def update(self, service, identity, object):
-            pass
-        
-        def delete(self, service, identity):
-            pass
-    
-    class EventAdapter(Adapter):
-        def insert(self, service, object):
+        def insert(self, service, local_object):
+            """
+            Insert a local object into the Google Service.
+            
+            @param service: The Google API service.
+            @param local_object: An objects.Event instance.
+            
+            @return a DataStorePeerIdentity with information about the 
+                    new Google Entry. 
+            """
+            
             entry = gdata.calendar.data.CalendarEventEntry()
             
-            entry = self._event_to_gdata(object, entry)
+            entry = self._local_to_gdata(local_object, entry)
             
             new_entry = service.calendar_client.InsertEvent(entry)
             
             identity = self.new_identity()
             identity.type = 'Event'
-            identity.identity = new_entry.GetEditLink().href
+            identity.identity = self.json_links(new_entry)
             
             return identity
         
-        def update(self, service, gdata_entry, object):
-            updated_entry = self._event_to_gdata(object, gdata_entry)
+        def update(self, service, gdata_object, local_object):
+            """
+            Update an existing object in Google with data from a local object.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.CalendarEventEntry. 
+            @param local_object: An objects.Contact instance.
+            """
+            
+            updated_entry = self._local_to_gdata(local_object, gdata_object)
             
             service.calendar_client.Update(updated_entry)
         
-        def delete(self, service, gdata_entry):
-            service.calendar_client.Delete(gdata_entry)
+        def delete(self, service, gdata_object):
+            """
+            Delete an existing object from the Google Services.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.CalendarEventEntry.
+            """
+            
+            service.calendar_client.Delete(gdata_object)
     
-    class ContactAdapter(Adapter):
-        def insert(self, service, object):
-            pass
+    class ContactEntryAdapter(Adapter):
+        def _local_to_gdata(self, local_object, gdata_object):
+            """
+            Update a GData instance with data from a local instance.
+            
+            @param local_object: An objects.Contact instance.
+            @param gdata_object: An gdata.contacts.data.ContactEntry instance.
+            
+            @return The updated gdata_object.
+            """
+            
+            return gdata_object
         
-        def update(self, service, identity, object):
-            pass
+        def _gdata_to_local(self, local_object, gdata_object):
+            """
+            Update a local instance with data from a GData instance.
+            
+            @param local_object: An objects.Contact instance.
+            @param gdata_object: An gdata.contacts.data.ContactEntry instance.
+            
+            @return The updated local_object.
+            """
+            
+            return local_object
         
-        def delete(self, service, identity):
-            pass
+        def insert(self, service, local_object):
+            """
+            Insert a local object into the Google Service.
+            
+            @param service: The Google API service.
+            @param local_object: An objects.Contact instance.
+            
+            @return a DataStorePeerIdentity with information about the 
+                    new Google Entry. 
+            """
+            
+            entry = gdata.contacts.data.ContactEntry()
+            
+            entry = self._local_to_gdata(local_object, entry)
+            
+            new_entry = service.contacts_client.CreateContact(entry)
+            
+            identity = self.new_identity()
+            identity.type = 'Contact'
+            identity.identity = self.json_links(new_entry)
+            
+            return identity
+        
+        def update(self, service, gdata_object, local_object):
+            """
+            Update an existing object in Google with data from a local object.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.ContactEntry. 
+            @param local_object: An objects.Contact instance.
+            """
+            
+            updated_entry = self._local_to_gdata(local_object, gdata_object)
+            
+            service.contacts_client.Update(updated_entry)
+        
+        def delete(self, service, gdata_object):
+            """
+            Delete an existing object from the Google Services.
+            
+            @param service: The Google API service.
+            @param gdata_object: The existing gdata.contacts.data.ContactEntry.
+            """
+            
+            service.contacts_client.Delete(gdata_object)
     
     def __init__(self, datastore, service):
         """
@@ -1156,9 +1425,9 @@ class GoogleBackend(DataStoreBackend):
         self.service = service
         self.query = self.Query()
         self.adapters = {
-            'Calendar' : self.CalendarAdapter(),
-            'Event' : self.EventAdapter(),
-            'Contact' : self.ContactAdapter(),
+            'Calendar' : self.CalendarEntryAdapter(),
+            'Event' : self.CalendarEventEntryAdapter(),
+            'Contact' : self.ContactEntryAdapter(),
         }
     
     def find_objects(self, query):
@@ -1175,6 +1444,20 @@ class GoogleBackend(DataStoreBackend):
         result = self.query.execute(self.service, query)
         
         return result
+    
+    def find_edit_link(self, links):
+        """
+        Returns the Google edit link from a CalendarEventEntry link list.
+        """
+        
+        return links[self.LINK_EDIT]
+    
+    def find_eventfeed_link(self, links):
+        """
+        Returns the Google eventFeed link from a CalendarEventEntry link list.
+        """
+        
+        return links[self.LINK_EVENTFEED]
     
     def insert_object(self, object):
         """
@@ -1198,8 +1481,10 @@ class GoogleBackend(DataStoreBackend):
         @param object: The new object data.
         """
         
+        links = json.loads(identity.identity)
+        
         query = self.datastore.get_query('event_by_id')
-        query.id = identity.identity
+        query.id = self.find_edit_link(links)
         
         current_entry = self.find_objects(query)
         
@@ -1213,8 +1498,10 @@ class GoogleBackend(DataStoreBackend):
         @param identity: The object's peer identity.
         """
         
+        links = json.loads(identity.identity)
+        
         query = self.datastore.get_query('event_by_id')
-        query.id = identity.identity
+        query.id = self.find_edit_link(links)
         
         current_entry = self.find_objects(query)
         
