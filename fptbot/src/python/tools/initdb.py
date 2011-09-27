@@ -39,7 +39,7 @@ import objects
 
 if __name__ == '__main__':
     bot = Bot()
-    bot.init(runlevel.LOCAL_FILESYSTEM)
+    bot.init(runlevel.LOCAL_SERVICE)
     
     persistence = bot.get_subsystem('local-persistence')
     
