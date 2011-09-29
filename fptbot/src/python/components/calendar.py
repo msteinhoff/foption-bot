@@ -31,6 +31,7 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 import datetime
+import time
 import json
 
 import sqlalchemy.orm.exc
@@ -319,6 +320,15 @@ class DataStore():
         
         return self.primary_backend.find_objects(self, query)
     
+    def find_identities(self, object):
+        """
+        Find a identity for a specific object in the primary query.
+        
+        @param object: The object to use.
+        """
+        
+        return self.primary_backend.find_datastore_identities(object)
+    
     def insert_object(self, source, object):
         """
         insert a new object into the datastore.
@@ -419,7 +429,7 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
             for secondary in secondaries:
                 datastore_identity = secondary.insert_object(object)
                 
-                primary.create_peer_identity(
+                primary.create_backend_identity(
                     stored_object,
                     datastore_identity
                 )
@@ -867,7 +877,7 @@ class SqlAlchemyBackend(DataStoreBackend):
         
         return backend
     
-    def create_peer_identity(self, object, datastore_identity):
+    def create_backend_identity(self, object, datastore_identity):
         """
         Create a mapping between a local object and an remote peer identity.
         
@@ -905,6 +915,27 @@ class SqlAlchemyBackend(DataStoreBackend):
         identity.identity = datastore_identity.identity
         
         self.session.add(identity)
+    
+    def find_datastore_identities(self, object):
+        """
+        Returns a DataStorePeerIdentity for a given local object.
+        
+        @param object: The local object.
+        
+        @return A DataStorePeerIdentity instance.
+        """
+        
+        result = []
+        
+        for identity in object.identities:
+            datastore_identity = DataStorePeerIdentity()
+            datastore_identity.backend = identity.backend.typename
+            datastore_identity.type = identity.typename
+            datastore_identity.identity = identity.identity
+            
+            result.append(datastore_identity)
+            
+        return result
     
     def find_objects(self, query):
         """
@@ -1070,34 +1101,34 @@ class GoogleBackend(DataStoreBackend):
             @return The updated gdata_object.
             """
             
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Calendar: title
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if local_object.title:
                 if gdata_object.title:
                     gdata_object.title.text = local_object.title
                 else:
                     gdata_object.title = atom.data.Title(text=local_object.title)
             
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Calendar: summary
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if local_object.summary:
                 if gdata_object.summary:
                     gdata_object.summary.text = local_object.summary
                 else:
                     gdata_object.summary = atom.data.Summary(text=local_object.summary)
             
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Calendar: timezone
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # TODO: default timezone configurable
             if gdata_object.timezone is None:
                 gdata_object.timezone = gdata.calendar.data.TimeZoneProperty(value='Europe/Berlin')
             
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Calendar: where
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # TODO: default location configurable
             if local_object.location:
                 if len(gdata_object.where) > 0:
@@ -1120,9 +1151,9 @@ class GoogleBackend(DataStoreBackend):
                     
                     gdata_object.where.append(where)
             
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             # Calendar: color
-            #-----------------------------------------------------------------------
+            #-------------------------------------------------------------------
             if local_object.color:
                 color = '#{0}'.format(local_object.color)
                 
@@ -1137,7 +1168,6 @@ class GoogleBackend(DataStoreBackend):
                 
                 if gdata_object.color is None:
                     gdata_object.color = gdata.calendar.data.ColorProperty(value=color)
-                    
             
             return gdata_object
         
@@ -1151,13 +1181,45 @@ class GoogleBackend(DataStoreBackend):
             @return The updated local_object.
             """
             
-            return local_object
+            #-------------------------------------------------------------------
+            # Calendar: title
+            #-------------------------------------------------------------------
+            if gdata_object.title:
+                local_object.title = gdata_object.title.text 
+            
+            #-------------------------------------------------------------------
+            # Calendar: summary
+            #-------------------------------------------------------------------
+            if gdata_object.summary:
+                local_object.summary = gdata_object.summary.text 
+            
+            #-------------------------------------------------------------------
+            # Calendar: where
+            #-------------------------------------------------------------------
+            if gdata_object.location and len(gdata_object.where) > 0:
+                local_object.location = gdata_object.where[0].value 
+            
+            #-------------------------------------------------------------------
+            # Calendar: color
+            #-------------------------------------------------------------------
+            if gdata_object.color.value:
+                local_object.color = '#{0}'.format(gdata_object.color.value)
+            
+            #-------------------------------------------------------------------
+            # Calendar: type (internal attribute)
+            #-------------------------------------------------------------------
+            if len(gdata_object.extended_property) > 0:
+                for property in gdata_object.extended_property:
+                    if property.name == self.properties['type']:
+                        local_object.type = property.value
+            
+            return gdata_object
         
-        def insert(self, service, local_object):
+        def insert(self, backend, local_object):
             """
             Insert a local object into the Google Service.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param local_object: An objects.Calendar instance.
             
             @return a DataStorePeerIdentity with information about the 
@@ -1168,7 +1230,7 @@ class GoogleBackend(DataStoreBackend):
             
             entry = self._local_to_gdata(local_object, entry)
             
-            new_entry = service.calendar_client.InsertCalendar(entry)
+            new_entry = backend.service.calendar_client.InsertCalendar(entry)
             
             identity = self.new_identity()
             identity.type = 'Calendar'
@@ -1176,28 +1238,28 @@ class GoogleBackend(DataStoreBackend):
             
             return identity
         
-        def update(self, service, gdata_object, local_object):
+        def update(self, backend, gdata_object, local_object):
             """
             Update an existing object in Google with data from a local object.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param gdata_object: The existing gdata.contacts.data.CalendarEntry. 
             @param local_object: An objects.Calendar instance.
             """
             
             updated_entry = self._local_to_gdata(local_object, gdata_object)
             
-            service.calendar_client.Update(updated_entry)
+            backend.service.calendar_client.Update(updated_entry)
         
-        def delete(self, service, gdata_object):
+        def delete(self, backend, gdata_object):
             """
             Delete an existing object from the Google Services.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param gdata_object: The existing gdata.contacts.data.CalendarEntry.
             """
             
-            service.calendar_client.Delete(gdata_object)
+            backend.calendar_client.Delete(gdata_object)
     
     class CalendarEventEntryAdapter(Adapter):
         def _local_to_gdata(self, local_object, gdata_object):
@@ -1294,13 +1356,56 @@ class GoogleBackend(DataStoreBackend):
             @return The updated local_object.
             """
             
+            #-------------------------------------------------------------------
+            # Event: title
+            #-------------------------------------------------------------------
+            if gdata_object.title:
+                local_object.title = gdata_object.title.text
+            
+            #-------------------------------------------------------------------
+            # Event: description
+            #-------------------------------------------------------------------
+            if gdata_object.content:
+                local_object.description = gdata_object.content.text
+            
+            #-------------------------------------------------------------------
+            # Event: where
+            #-------------------------------------------------------------------
+            if len(gdata_object.where) > 0:
+                local_object.location = gdata_object.where[0].value
+            
+            #-----------------------------------------------------------------------
+            # Event: when
+            #-----------------------------------------------------------------------
+            if len(gdata_object.when) > 0:
+                when = gdata_object.when[0]
+                
+                try:
+                    start = time.strptime(when.start, self.date_format_time)
+                    end = time.strptime(when.end, self.date_format_time)
+                except ValueError:
+                    try:
+                        start = time.strptime(when.start, self.date_format_allday)
+                        end = time.strptime(when.end, self.date_format_allday)
+                    except ValueError:
+                        start = None
+                        end = None
+                
+                if start and end:
+                    if start != end:
+                        delta = datetime.timedelta(-1)
+                        end -= delta
+                    
+                    local_object.start = start
+                    local_object.end = end
+            
             return local_object
         
-        def insert(self, service, local_object):
+        def insert(self, backend, local_object):
             """
             Insert a local object into the Google Service.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param local_object: An objects.Event instance.
             
             @return a DataStorePeerIdentity with information about the 
@@ -1311,7 +1416,19 @@ class GoogleBackend(DataStoreBackend):
             
             entry = self._local_to_gdata(local_object, entry)
             
-            new_entry = service.calendar_client.InsertEvent(entry)
+            calendar_identities = backend.datastore.find_identities(local_object.calendar)
+            
+            try:
+                google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
+                
+                links = json.loads(google_identity.identity)
+                
+                calendar_uri = backend.find_eventfeed_link(links)
+                
+            except KeyError:
+                calendar_uri = None
+            
+            new_entry = backend.service.calendar_client.InsertEvent(entry, calendar_uri)
             
             identity = self.new_identity()
             identity.type = 'Event'
@@ -1319,7 +1436,7 @@ class GoogleBackend(DataStoreBackend):
             
             return identity
         
-        def update(self, service, gdata_object, local_object):
+        def update(self, backend, gdata_object, local_object):
             """
             Update an existing object in Google with data from a local object.
             
@@ -1330,17 +1447,17 @@ class GoogleBackend(DataStoreBackend):
             
             updated_entry = self._local_to_gdata(local_object, gdata_object)
             
-            service.calendar_client.Update(updated_entry)
+            backend.service.calendar_client.Update(updated_entry)
         
-        def delete(self, service, gdata_object):
+        def delete(self, backend, gdata_object):
             """
             Delete an existing object from the Google Services.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param gdata_object: The existing gdata.contacts.data.CalendarEventEntry.
             """
             
-            service.calendar_client.Delete(gdata_object)
+            backend.service.calendar_client.Delete(gdata_object)
     
     class ContactEntryAdapter(Adapter):
         def _local_to_gdata(self, local_object, gdata_object):
@@ -1352,6 +1469,46 @@ class GoogleBackend(DataStoreBackend):
             
             @return The updated gdata_object.
             """
+            
+            if local_object.firstname:
+                local = local_object.firstname
+                remote = gdata_object.name
+                
+                if remote:
+                    remote.given_name = local
+                else:
+                    remote = gdata.data.Name(
+                        given_name=gdata.data.GivenName(text=local)
+                    )
+            
+            if local_object.lastname:
+                local = local_object.lastname
+                remote = gdata_object.name
+                
+                if  remote:
+                    remote.family_name = local
+                else:
+                    remote = gdata.data.Name(
+                        family_name=gdata.data.FamilyName(text=local)
+                    )
+            
+            if local_object.nickname:
+                local = local_object.nickname
+                remote = gdata_object.nickname
+                
+                if remote:
+                    remote.text = local
+                else:
+                    remote = gdata.contacts.data.NickName(text=local)
+            
+            if local_object.birthday:
+                local = local_object.birthday.strftime(self.date_format_allday)
+                remote = gdata_object.birthday
+                
+                if remote:
+                    remote.when = local
+                else:
+                    remote = gdata.contacts.data.Birthday(when=local)
             
             return gdata_object
         
@@ -1365,13 +1522,28 @@ class GoogleBackend(DataStoreBackend):
             @return The updated local_object.
             """
             
-            return local_object
+            if gdata_object.name and gdata_object.name.given_name:
+                local_object.firstname = gdata_object.name.given_name
+            
+            if gdata_object.name and gdata_object.name.family_name:
+                local_object.lastname = gdata_object.name.family_name
+            
+            if gdata_object.nickname:
+                local_object.nickname = gdata_object.nickname.text
+            
+            if gdata_object.birthday:
+                local_object.birthday = time.strptime(
+                    gdata_object.birthday.when,
+                    self.date_format_allday
+                )
+            
+            return gdata_object
         
-        def insert(self, service, local_object):
+        def insert(self, backend, local_object):
             """
             Insert a local object into the Google Service.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param local_object: An objects.Contact instance.
             
             @return a DataStorePeerIdentity with information about the 
@@ -1382,7 +1554,7 @@ class GoogleBackend(DataStoreBackend):
             
             entry = self._local_to_gdata(local_object, entry)
             
-            new_entry = service.contacts_client.CreateContact(entry)
+            new_entry = backend.service.contacts_client.CreateContact(entry)
             
             identity = self.new_identity()
             identity.type = 'Contact'
@@ -1390,28 +1562,28 @@ class GoogleBackend(DataStoreBackend):
             
             return identity
         
-        def update(self, service, gdata_object, local_object):
+        def update(self, backend, gdata_object, local_object):
             """
             Update an existing object in Google with data from a local object.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param gdata_object: The existing gdata.contacts.data.ContactEntry. 
             @param local_object: An objects.Contact instance.
             """
             
             updated_entry = self._local_to_gdata(local_object, gdata_object)
             
-            service.contacts_client.Update(updated_entry)
+            backend.service.contacts_client.Update(updated_entry)
         
-        def delete(self, service, gdata_object):
+        def delete(self, backend, gdata_object):
             """
             Delete an existing object from the Google Services.
             
-            @param service: The Google API service.
+            @param backend: The Google Backend.
             @param gdata_object: The existing gdata.contacts.data.ContactEntry.
             """
             
-            service.contacts_client.Delete(gdata_object)
+            backend.service.contacts_client.Delete(gdata_object)
     
     def __init__(self, datastore, service):
         """
@@ -1469,7 +1641,7 @@ class GoogleBackend(DataStoreBackend):
         """
         
         adapter = self.adapters[object.__class__.__name__]
-        identity = adapter.insert(self.service, object)
+        identity = adapter.insert(self, object)
         
         return identity
     
@@ -1489,7 +1661,7 @@ class GoogleBackend(DataStoreBackend):
         current_entry = self.find_objects(query)
         
         adapter = self.adapters[identity.type]
-        adapter.update(self.service, current_entry, object)
+        adapter.update(self, current_entry, object)
    
     def delete_object(self, identity):
         """
@@ -1506,4 +1678,4 @@ class GoogleBackend(DataStoreBackend):
         current_entry = self.find_objects(query)
         
         adapter = self.adapters[identity.type]
-        adapter.delete(self.service, current_entry)
+        adapter.delete(self, current_entry)
