@@ -142,8 +142,34 @@ class Bot(object):
         
         return self._config[identifier]
     
+    def get_config_key(self, string):
+        """
+        Load a config key by string identifier.
+        
+        This method can be used to request configuration values
+        before the configuration object is available.
+        
+        Format: config:[identifier].[key]
+        
+        @param string: The identifier.
+        
+        @return The configuration value.
+        """
+        
+        if string.startswith('config:'):
+            config_fqdn = string.split(':')[1].split('.')
+            identifier = '.'.join(config_fqdn[:-1])
+            key = '.'.join(config_fqdn[-1:])
+            
+            result = self.get_config(identifier).get(key)
+        else:
+            result = string
+            
+        return result
+    
     def get_configs(self):
         """
+        @return All known configuration objects.
         """
         
         return self._config
@@ -215,6 +241,16 @@ class Bot(object):
         """
         Execute a runlevel switch.
         
+        TODO multithreaded or singlethreaded, event-based architecture
+        for name, object in self._interaction.items():
+            #self._processes[name] = multiprocessing.Process(target=Interaction.startInteraction, args=(self, object))
+            #self._processes[name].start()
+            
+            self.logger.info('starting process %s', name)
+            self._processes[name] = object
+            self._processes[name].start()
+
+        
         @param requested: The requested runlevel.
         """
         
@@ -231,11 +267,15 @@ class Bot(object):
             
             if direction == runlevel.DIRECTION_UP:
                 self.logger.info('entering runlevel %s', next)
-                self._start_subsystems(next)
+                
+                for identifier in self.__runlevel_map[requested]:
+                    self.start_subsystem(identifier)
                 
             if direction == runlevel.DIRECTION_DOWN:
                 self.logger.info('leaving runlevel %s', next)
-                self._stop_subsystems(next)
+                
+                for identifier in self.__runlevel_map[requested]:
+                    self.stop_subsystem(identifier)
             
         self.__runlevel = requested
         
@@ -251,54 +291,42 @@ class Bot(object):
         
         return self.__runlevel
     
-    def _start_subsystems(self, requested):
+    def start_subsystem(self, identifier):
         """
-        Start all subsystems for the requested runlevel.
+        Start a subsystem registered with the bot.
         
-        TODO multithreaded or singlethreaded, event-based architecture
-        for name, object in self._interaction.items():
-            #self._processes[name] = multiprocessing.Process(target=Interaction.startInteraction, args=(self, object))
-            #self._processes[name].start()
-            
-            self.logger.info('starting process %s', name)
-            self._processes[name] = object
-            self._processes[name].start()
-
-        @param requested: The requested runlevel.
+        @param identifier: The identifier of the subsystem.
         """
         
-        for identifier in self.__runlevel_map[requested]:
-            if self._subsystems[identifier].get_state() != runlevel.STATE_HALTED:
-                self.logger.info('subsystem %s: skipped (not halted)', identifier)
-                continue
-            
-            try:
-                self.logger.info('subsystem %s: starting', identifier)
-                self._subsystems[identifier].start()
-                self.logger.info('subsystem %s: started', identifier)
-            except:
-                self.logger.exception('subsystem %s: start failed', identifier)
-
+        if self._subsystems[identifier].get_state() != runlevel.STATE_HALTED:
+            self.logger.info('subsystem %s: skipped (not halted)', identifier)
+            return
         
-    def _stop_subsystems(self, requested):
+        try:
+            self.logger.info('subsystem %s: starting', identifier)
+            self._subsystems[identifier].start()
+            self.logger.info('subsystem %s: started', identifier)
+        except:
+            self.logger.exception('subsystem %s: start failed', identifier)
+    
+        
+    def stop_subsystem(self, identifier):
         """
-        Stop all subsystems for the requested runlevel.
+        Stop a subsystem registered with the bot.
         
-        @param requested: The requested runlevel.
+        @param identifier: The identifier of the subsystem.
         """
         
-        for identifier in self.__runlevel_map[requested]:
-            if self._subsystems[identifier].get_state() != runlevel.STATE_RUNNING:
-                self.logger.info('subsystem %s: skipped (not running)', identifier)
-                continue
-            
-            try:
-                self.logger.info('subsystem %s: starting', identifier)
-                self._subsystems[identifier].stop()
-                self.logger.info('subsystem %s: started', identifier)
-            except:
-                self.logger.exception('subsystem %s: start failed', identifier)
-
+        if self._subsystems[identifier].get_state() != runlevel.STATE_RUNNING:
+            self.logger.info('subsystem %s: skipped (not running)', identifier)
+            return
+        
+        try:
+            self.logger.info('subsystem %s: stopping', identifier)
+            self._subsystems[identifier].stop()
+            self.logger.info('subsystem %s: stopped', identifier)
+        except:
+            self.logger.exception('subsystem %s: stop failed', identifier)
     
 class BotConfig(Config):
     identifier = 'core.bot'

@@ -98,7 +98,12 @@ class SqlitePersistence(subsystem.Subsystem):
         Implementation of Subsystem.start()
         """
         
-        self.connection = sqlite3.connect(self.sqlite_file)
+        if not self.sqlite_file:
+            raise KeyError('missing sql file')
+        
+        sqlite_file = self.bot.get_config_key(self.sqlite_file)
+        
+        self.connection = sqlite3.connect(sqlite_file)
         self.connection.row_factory = sqlite3.Row
         
         self._running()
@@ -162,14 +167,7 @@ class SqlAlchemyPersistence(subsystem.Subsystem):
         if not self.connect_string:
             raise KeyError('missing connect string')
         
-        if self.connect_string.startswith('config:'):
-            config_fqdn = self.connect_string.split(':')[1].split('.')
-            identifier = '.'.join(config_fqdn[:-1])
-            key = '.'.join(config_fqdn[-1:])
-            
-            connect_string = self.bot.get_config(identifier).get(key)
-        else:
-            connect_string = self.connect_string
+        connect_string = self.bot.get_config_key(self.connect_string)
         
         self.engine = create_engine(connect_string)
         self.sessionobj = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
