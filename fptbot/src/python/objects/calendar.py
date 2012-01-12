@@ -97,9 +97,9 @@ class Event(SqlAlchemyPersistence.Base):
     def __repr__(self):
         return '<Event(id={0}|start={1}|end={2}|title={3})>'.format(
             self.id,
-            self.title,
             self.start,
-            self.end
+            self.end,
+            self.title,
         )
 
 class Contact(SqlAlchemyPersistence.Base):
