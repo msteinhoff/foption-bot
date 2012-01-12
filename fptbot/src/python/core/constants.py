@@ -41,7 +41,7 @@ __all__ = [
 # ------------------------------------------------------------------------------
 # directories
 # ------------------------------------------------------------------------------
-DIR_ROOT = '/Users/msteinhoff/Work/Eclipse/foption/bot'
+DIR_ROOT = '/Users/msteinhoff/Work/Eclipse/projects/foption/bot'
 DIR_CONFIG = '{0}/config'.format(DIR_ROOT)
 
 # ------------------------------------------------------------------------------
