@@ -99,13 +99,13 @@ def calculate_distance(current, requested):
     """
     
     if current == requested:
-        list = []
+        distance = []
 
     if current < requested:
-        list = range(current+1, requested+1)
+        distance = range(current+1, requested+1)
 
     if current > requested:
-        list = range(requested+1, current+1)
-        list.reverse()
+        distance = range(requested+1, current+1)
+        distance.reverse()
 
-    return list
+    return distance
