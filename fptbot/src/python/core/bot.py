@@ -268,13 +268,13 @@ class Bot(object):
             if direction == runlevel.DIRECTION_UP:
                 self.logger.info('entering runlevel %s', next)
                 
-                for identifier in self.__runlevel_map[requested]:
+                for identifier in self.__runlevel_map[next]:
                     self.start_subsystem(identifier)
                 
             if direction == runlevel.DIRECTION_DOWN:
                 self.logger.info('leaving runlevel %s', next)
                 
-                for identifier in self.__runlevel_map[requested]:
+                for identifier in self.__runlevel_map[next]:
                     self.stop_subsystem(identifier)
             
         self.__runlevel = requested
