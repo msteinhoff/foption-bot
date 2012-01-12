@@ -90,6 +90,11 @@ class CalendarComponent(Component):
         google = GoogleBackend(datastore, self.bot.get_subsystem('google-api-service'))
         datastore.register_secondary_backend(google)
         
+        datastore.register_authority(SystemAllowAuthority(), default=True)
+        datastore.register_authority(SystemDenyAuthority())
+        datastore.register_authority(LocalUserAuthority())
+        datastore.register_authority(LocalBirthdayAuthority())
+        
         self.datastore = datastore
         
         self._running()
@@ -269,6 +274,8 @@ class DataStore():
         """
         
         self.primary_backend = None
+        self.authorities = {}
+        self.defaulf_authority = None
         self.secondary_backends = []
         self.strategy = strategy(self)
     
@@ -278,7 +285,7 @@ class DataStore():
         
         @param backend: The backend instance.
         
-        @return Nothing
+        @return None
         """
         
         self.primary_backend = backend
@@ -289,10 +296,41 @@ class DataStore():
         
         @param backend: The backend instance.
         
-        @return Nothing
+        @return None
         """
         
         self.secondary_backends.append(backend)
+        
+        
+    def register_authority(self, authority, default=False):
+        """
+        Register a new object authority.
+        
+        @param authority: The authority instance.
+        @param authority: If the instance should be the default authority.
+        
+        @return None
+        """
+        
+        name = authority.NAME
+        self.authorities[name] = authority
+        
+        if default:
+            self.defaulf_authority = name
+        
+    def get_authority(self, name=None):
+        """
+        Return a authority by name.
+        
+        @param name: The name of the authority.
+        
+        @return The authority instance.
+        """
+        
+        if not name:
+            name = self.defaulf_authority
+        
+        return self.authorities[name]
     
     def get_query(self, name):
         """"
@@ -426,7 +464,15 @@ class DataStoreOneWaySync(DataStoreSyncStrategy):
         try:
             stored_object = primary.insert_object(object)
             
+            try:
+                authority = self.datastore.get_authority(object.get_authority_name())
+            except AttributeError:
+                authority = self.datastore.get_authority()
+            
             for secondary in secondaries:
+                if not authority.may_replicate(object, primary, secondary):
+                    continue
+                
                 datastore_identity = secondary.insert_object(object)
                 
                 primary.create_backend_identity(
@@ -557,7 +603,7 @@ class DataStoreTwoWaySync(DataStoreSyncStrategy):
         """
         
         pass
-
+    
 class DataStoreQuery(object):
     """
     An abstract data store query.
@@ -610,6 +656,73 @@ class DataStorePeerIdentity(object):
         self.backend = backend
         self.type = type
         self.identity = identity
+
+class DataStoreAuthority(object):
+    """
+    An abstract data store object authority.
+    
+    A object authority decides whether a specific object is allowed to be
+    replicated between two backends.
+    """
+    
+    def may_replicate(self, object, source, destination):
+        """
+        Decide wether the given object may be replicated from src to dst.
+        
+        @param object: The object to check.
+        @param source: The source backend.
+        @param destination: The destination backend.
+        """
+        
+        return NotImplementedError
+
+class SystemAllowAuthority(DataStoreAuthority):
+    """
+    A default authority.
+    
+    All objects may replicate.
+    """
+    
+    NAME = '/system/allow'
+    
+    def may_replicate(self, object, source, destination):
+        return True
+
+class SystemDenyAuthority(DataStoreAuthority):
+    """
+    A system authority.
+    
+    No objects may replicate.
+    """
+    
+    NAME = '/system/deny'
+    
+    def may_replicate(self, object, source, destination):
+        return False
+
+class LocalUserAuthority(DataStoreAuthority):
+    """
+    An authority for objects created by local users.
+    
+    All objects may replicate.
+    """
+    
+    NAME = '/local/user'
+    
+    def may_replicate(self, object, source, destination):
+        return True
+
+class LocalBirthdayAuthority(DataStoreAuthority):
+    """
+    An authority for objects created by local users.
+    
+    Keep all authority-based objects local.
+    """
+    
+    NAME = '/local/birthday'
+    
+    def may_replicate(self, object, source, destination):
+        return False
 
 class DataStoreBackend(object):
     """
@@ -966,6 +1079,24 @@ class SqlAlchemyBackend(DataStoreBackend):
         self.session.add(object)
         
         return object
+    
+    def should_replicate(self, object):
+        """
+        Check whether the given object should be replicated to secondary
+        backends.
+        
+        @param object: The object to check.
+        
+        @return True if it is ok to replicate the object, otherwise False.
+        """
+        
+        check = {
+            'Calendar' : lambda: (object.type == Calendar.BASIC), 
+            'Event': lambda: (object.calendar.type == Calendar.BASIC), 
+            'Contact': True
+        }
+        
+        return check[object.__class__.__name__]()
     
     def update_object(self, object):
         """

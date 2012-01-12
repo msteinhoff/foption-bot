@@ -45,27 +45,27 @@ class Calendar(SqlAlchemyPersistence.Base):
     Represent a calendar for the calendar component.
     """
     
-    BASIC = 'basic'
-    MANAGED = 'managed'
-    
     __tablename__ = 'calendars'
     
     # DDL
     id = Column(Integer, primary_key=True)
     isDeleted = Column(Boolean, default=False)
     deletedOn = Column(DateTime, nullable=True, onupdate=set_deletion_date)
+    authority = Column(String(255))
     
     title = Column(String(255))
     summary = Column(Text)
     location = Column(String(255))
     color = Column(String(6))
-    type = Column(Enum(BASIC, MANAGED), default=BASIC)
+    
+    def get_authority_name(self):
+        return self.authority
     
     def __repr__(self):
-        return '<Calendar(id={0},title={1}|type={2})>'.format(
+        return '<Calendar(id={0},title={1}|authority={2})>'.format(
             self.id, 
             self.title,
-            self.type
+            self.authority
         )
 
 class Event(SqlAlchemyPersistence.Base):
@@ -90,6 +90,9 @@ class Event(SqlAlchemyPersistence.Base):
     
     # ORM
     calendar = relationship('Calendar', backref=backref('events'))
+    
+    def get_authority_name(self):
+        return self.calendar.get_authority_name()
     
     def __repr__(self):
         return '<Event(id={0}|start={1}|end={2}|title={3})>'.format(
