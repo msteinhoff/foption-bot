@@ -1547,16 +1547,20 @@ class GoogleBackend(DataStoreBackend):
             
             entry = self._local_to_gdata(local_object, entry)
             
-            calendar_identities = backend.datastore.find_identities(local_object.calendar)
+            if local_object.calendar:
+                calendar_identities = backend.datastore.find_identities(local_object.calendar)
             
-            try:
-                google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
-                
-                links = json.loads(google_identity.identity)
-                
-                calendar_uri = backend.find_eventfeed_link(links)
-                
-            except KeyError:
+                try:
+                    google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
+                    
+                    links = json.loads(google_identity.identity)
+                    
+                    calendar_uri = backend.find_eventfeed_link(links)
+                    
+                except KeyError:
+                    calendar_uri = None
+            
+            else:
                 calendar_uri = None
             
             new_entry = backend.service.calendar_client.InsertEvent(entry, calendar_uri)
