@@ -31,6 +31,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import random
 
 from interaction.irc.module import Module
@@ -44,7 +45,7 @@ class Facts(Module):
     # Module implementation
     #---------------------------------------------------------------------------
     def initialize(self):
-        self.logger = self.client.bot.get_logger('interaction.irc.facts')
+        self.logger = logging.getLogger('interaction.irc.facts')
         self.component = self.client.bot.get_subsystem('facts-component')
         
     def get_receive_listeners(self):

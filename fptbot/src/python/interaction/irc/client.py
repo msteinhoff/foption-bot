@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import socket
 import asyncore
 import asynchat
@@ -82,7 +83,7 @@ class Client(Interaction, asynchat.async_chat):
         self.bot.register_config(ClientConfig)
 
         self.config = self.bot.get_config(ClientConfig.identifier)
-        self.logger = self.bot.get_logger(ClientConfig.identifier)
+        self.logger = logging.getLogger(ClientConfig.identifier)
         
         self.me = User(
             source=ClientSource(nickname=self.config.get('nickname'), ident=self.config.get('ident')),

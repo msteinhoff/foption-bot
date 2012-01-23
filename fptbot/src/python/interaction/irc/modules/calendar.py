@@ -31,6 +31,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import re
 
 from datetime import date
@@ -75,7 +76,7 @@ class Calendar(InteractiveModule):
         
         bot.register_config(CalendarConfig)
         
-        self.logger = bot.get_logger('interaction.irc.calendar')
+        self.logger = logging.getLogger('interaction.irc.calendar')
         self.config = bot.get_config('interaction.irc.calendar')
         self.component = bot.get_subsystem('calendar-component');
         

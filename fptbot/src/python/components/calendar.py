@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import datetime
 import time
 import json
@@ -65,7 +66,7 @@ class CalendarComponent(Component):
         
         self.bot.register_config(CalendarComponentConfig)
         
-        self.logger = self.bot.get_logger('components.calendar')
+        self.logger = logging.getLogger('components.calendar')
         self.config = self.bot.get_config('components.calendar')
         
         self.datastore = None
@@ -1548,17 +1549,17 @@ class GoogleBackend(DataStoreBackend):
             entry = self._local_to_gdata(local_object, entry)
             
             if local_object.calendar:
-                calendar_identities = backend.datastore.find_identities(local_object.calendar)
+            calendar_identities = backend.datastore.find_identities(local_object.calendar)
             
-                try:
-                    google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
-                    
-                    links = json.loads(google_identity.identity)
-                    
-                    calendar_uri = backend.find_eventfeed_link(links)
-                    
-                except KeyError:
-                    calendar_uri = None
+            try:
+                google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
+                
+                links = json.loads(google_identity.identity)
+                
+                calendar_uri = backend.find_eventfeed_link(links)
+                
+            except KeyError:
+                calendar_uri = None
             
             else:
                 calendar_uri = None

@@ -155,7 +155,7 @@ class SqlAlchemyPersistence(subsystem.Subsystem):
         
         self.connect_string = connect_string
         
-        bot.get_logger('sqlalchemy.engine').setLevel(logging.INFO)
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
     
     def _start(self):
         """

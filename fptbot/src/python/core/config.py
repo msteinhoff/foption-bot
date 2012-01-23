@@ -30,13 +30,12 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 try:
     import cPickle as pickle
 except:
     import pickle
 import os
-
-from core.constants import DIR_CONFIG
 
 # ------------------------------------------------------------------------------
 # BusinessLogic
@@ -56,7 +55,7 @@ class Config(object):
         """
         
         self.bot = bot
-        self.logger = self.bot.get_logger('core.config')
+        self.logger = logging.getLogger('core.config')
         
         self.init(self.default_values())
         self.load()
@@ -153,7 +152,7 @@ class Config(object):
         exists but was not found in the persistence, it remains untouched. 
         """
         
-        filename = os.path.join(DIR_CONFIG, self.identifier)
+        filename = os.path.join(self.bot.root, self.identifier)
         
         try:
             rawdata = self.readobject(filename)
@@ -169,7 +168,7 @@ class Config(object):
         Save the current configuration data to persistence.
         """
         
-        filename = os.path.join(DIR_CONFIG, self.identifier)
+        filename = os.path.join(self.bot.root, self.identifier)
             
         try:
             self.writeobject(filename, self._keys)

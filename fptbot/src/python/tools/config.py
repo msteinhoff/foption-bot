@@ -30,8 +30,8 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-import argparse
 import logging
+import argparse
 
 from core import runlevel
 from core.bot import Bot
@@ -63,7 +63,7 @@ def config_init(args):
     bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
-    logger = bot.get_logger('tools.config')
+    logger = logging.getLogger('tools.config')
     
     def _init(identifier, object):
         logger.info('initializing configuration: %s', identifier)
@@ -92,7 +92,7 @@ def config_read(args):
     bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
-    logger = bot.get_logger('tools.config')
+    logger = logging.getLogger('tools.config')
     
     identifier = args.identifier
     
@@ -132,7 +132,7 @@ def config_write(args):
     bot = Bot(logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
-    logger = bot.get_logger('tools.config') 
+    logger = logging.getLogger('tools.config') 
     
     identifier = args.identifier
     key = args.key

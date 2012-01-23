@@ -24,22 +24,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-@since Jan 9, 2011
+@since Jan 16, 2012
 @author Mario Steinhoff
-
-TODO: Make environment-specific data configurable.
 """
 
-__version__ = '$Rev$'
-
 __all__ = [
-    'TIME_MINUTE',
-    'TIME_HOUR'
 ]
-
-# ------------------------------------------------------------------------------
-# time intervals
-# ------------------------------------------------------------------------------
-TIME_SECOND = 1
-TIME_MINUTE = TIME_SECOND * 60
-TIME_HOUR = TIME_MINUTE * 60

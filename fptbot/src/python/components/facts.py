@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
 import urllib
 import re
 import datetime
@@ -61,7 +62,7 @@ class FactsComponent(Component):
         self.bot.register_config(FactsComponentConfig)
         
         self.config = self.bot.get_config('components.facts')
-        self.logger = self.bot.get_logger('components.facts')
+        self.logger = logging.getLogger('components.facts')
         
         self.bot.register_timer(
             'components.facts.update',

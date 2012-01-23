@@ -53,14 +53,15 @@ class Bot(object):
     Provide general functionality and start all subsystems.
     """
     
-    def __init__(self, level=logging.DEBUG):
+    def __init__(self, root=None, level=logging.DEBUG):
         """
         Initialize the bot.
         """
         
         logging.basicConfig(level=level)
         
-        self.logger = self.get_logger()
+        self.root = root
+        self.logger = logging.getLogger('core.bot')
         
         self.__runlevel = runlevel.HALT
         self.__runlevel_map = collections.defaultdict(list)
@@ -71,7 +72,6 @@ class Bot(object):
         self._processes = {}
         
         self.register_config(BotConfig)
-        self.apply_logger_config()
         
         self.register_subsystem('local-persistence', 'core.persistence.SqlAlchemyPersistence', connect_string='config:core.bot.database-connectstring')
         self.register_subsystem('google-api-service', 'core.persistence.GoogleApiService')
@@ -80,7 +80,7 @@ class Bot(object):
         self.register_subsystem('facts-component', 'components.facts.FactsComponent')
         self.register_subsystem('irc-client', 'interaction.irc.client.Client')
         
-    def get_object( self, name ):
+    def get_object(self, name):
         """
         Returns a reference to the given object.
         
@@ -104,30 +104,13 @@ class Bot(object):
         return obj
     
     #---------------------------------------------------------------------------
-    # logging
-    #---------------------------------------------------------------------------
-    def get_logger(self, identifier=None):
-        """
-        Return a logger instance.
-        
-        @param identifier: The intended name. If no name is given, a default
-        of 'core.bot' is used.
-        """
-        
-        if identifier is None:
-            identifier = 'core.bot'
-            
-        return logging.getLogger(identifier)
-    
-    def apply_logger_config(self):
-        pass
-    
-    #---------------------------------------------------------------------------
     # configuration
     #---------------------------------------------------------------------------
     def register_config(self, clazz):
         """
-        @param clazz: 
+        Register a new configuration class.
+        
+        @param clazz: A reference to the class.
         """
         
         if clazz.identifier in self._config:
@@ -137,17 +120,21 @@ class Bot(object):
         
     def get_config(self, identifier):
         """
-        @param identifier: 
+        Returns a registered configuration object.
+        
+        @param identifier: The identifier of the configuration class.
+        
+        @return The configuration object.
         """
         
         return self._config[identifier]
     
     def get_config_key(self, string):
         """
-        Load a config key by string identifier.
+        Find a configuration value by string identifier.
         
-        This method can be used to request configuration values
-        before the configuration object is available.
+        Using this method, configuration keys can be referenced before
+        the actual configuration object is available.
         
         Format: config:[identifier].[key]
         
@@ -194,6 +181,8 @@ class Bot(object):
         
     def get_timer(self, identifier):
         """
+        Returns a registered timer object.
+        
         @param identifier: The identifier of the timer.
         
         @Return The timer instance.
@@ -225,7 +214,7 @@ class Bot(object):
     
     def get_subsystem(self, identifier):
         """
-        Return the subsystem instance.
+        Return a registered subsystem instance.
         
         @identifier: The identifier of the subsystem.
         

@@ -30,6 +30,8 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
+
 from core import runlevel
 from core.config import Config
 from core.component import Component, ComponentError
@@ -54,7 +56,7 @@ class PrincipalComponent(Component):
         self.bot.register_config(PrincipalComponentConfig)
         
         self.config = self.bot.get_config('components.principal')
-        self.logger = self.bot.get_logger('components.principal')
+        self.logger = logging.getLogger('components.principal')
     
     # --------------------------------------------------------------------------
     # Lifecycle
