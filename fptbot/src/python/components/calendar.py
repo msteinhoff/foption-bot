@@ -160,6 +160,13 @@ class CalendarComponent(Component):
         
         return self.datastore.find_objects(query)
     
+    def find_default_calendar(self):
+        default_id = self.config.get('defaultCalendarId')
+        
+        calendar = self.find_calendar_by_id(default_id)
+        
+        return calendar
+    
     def find_calendar_by_id(self, id):
         if id is None:
             return None
@@ -357,7 +364,7 @@ class DataStore():
         nothing was found.
         """
         
-        return self.primary_backend.find_objects(self, query)
+        return self.primary_backend.find_objects(query)
     
     def find_identities(self, object):
         """
@@ -1081,24 +1088,6 @@ class SqlAlchemyBackend(DataStoreBackend):
         
         return object
     
-    def should_replicate(self, object):
-        """
-        Check whether the given object should be replicated to secondary
-        backends.
-        
-        @param object: The object to check.
-        
-        @return True if it is ok to replicate the object, otherwise False.
-        """
-        
-        check = {
-            'Calendar' : lambda: (object.type == Calendar.BASIC), 
-            'Event': lambda: (object.calendar.type == Calendar.BASIC), 
-            'Contact': True
-        }
-        
-        return check[object.__class__.__name__]()
-    
     def update_object(self, object):
         """
         Update an existing object.
@@ -1549,17 +1538,17 @@ class GoogleBackend(DataStoreBackend):
             entry = self._local_to_gdata(local_object, entry)
             
             if local_object.calendar:
-            calendar_identities = backend.datastore.find_identities(local_object.calendar)
-            
-            try:
-                google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
+                calendar_identities = backend.datastore.find_identities(local_object.calendar)
                 
-                links = json.loads(google_identity.identity)
-                
-                calendar_uri = backend.find_eventfeed_link(links)
-                
-            except KeyError:
-                calendar_uri = None
+                try:
+                    google_identity = [identity for identity in calendar_identities if identity.backend == 'GoogleBackend'][0]
+                    
+                    links = json.loads(google_identity.identity)
+                    
+                    calendar_uri = backend.find_eventfeed_link(links)
+                    
+                except KeyError:
+                    calendar_uri = None
             
             else:
                 calendar_uri = None
