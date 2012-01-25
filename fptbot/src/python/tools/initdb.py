@@ -30,6 +30,9 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
+import logging
+import os
+
 from core import runlevel
 from core.bot import Bot
 from core.persistence import SqlAlchemyPersistence
@@ -38,7 +41,9 @@ from core.persistence import SqlAlchemyPersistence
 import objects
 
 if __name__ == '__main__':
-    bot = Bot()
+    config_root = os.environ['FPTBOT_CONFIG']
+    
+    bot = Bot(root=config_root, level=logging.INFO)
     bot.init(runlevel.LOCAL_SERVICE)
     
     persistence = bot.get_subsystem('local-persistence')
