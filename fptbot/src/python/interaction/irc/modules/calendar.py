@@ -127,11 +127,6 @@ class Calendar(InteractiveModule):
                  pattern=r'^[\d]+$',
                  syntaxhint='<id>'
             ),
-            InteractiveModuleCommand(
-                 keyword='syncdata',
-                 callback=self.sync_data,
-                 pattern=r'^(.+)$',
-                 syntaxhint='google'),
             
             InteractiveModuleCommand(
                  keyword='addevent',
@@ -239,7 +234,7 @@ class Calendar(InteractiveModule):
         Display the web calendar's address.
         """
         
-        return InteractiveModuleReply().add_line(self.config.get('calendarUrl'))
+        return InteractiveModuleReply(self.config.get('calendarUrl'))
     
     def display_events_today(self, event, location, command, parameter):
         """
@@ -275,19 +270,13 @@ class Calendar(InteractiveModule):
         """
         """
         
-        return InteractiveModuleReply().add_line('not implemented')
+        return InteractiveModuleReply('not implemented')
     
     def restore_deleted_object(self, event, location, command, parameter):
         """
         """
         
-        return InteractiveModuleReply().add_line('not implemented')
-    
-    def sync_data(self, event, location, command, parameter):
-        """
-        """
-        
-        return InteractiveModuleReply().add_line('not implemented')
+        return InteractiveModuleReply('not implemented')
     
     #---------------------------------------------------------------------------
     # InteractiveModule commands - events
@@ -315,7 +304,9 @@ class Calendar(InteractiveModule):
                 dateFrom = self._get_date(dates[0])
                 dateTo = self._get_date(dates[1])
             
-            event = Event(start=dateFrom, end=dateTo, title=title)
+            calendar = self.component.find_default_calendar()
+            
+            event = Event(calendar=calendar, start=dateFrom, end=dateTo, title=title)
             event = self.component.insert_object(event)
             
             reply.add_line("Eintrag erfolgreich eingefügt! ID: {0}".format(event.id))
@@ -343,8 +334,6 @@ class Calendar(InteractiveModule):
         value = parameter[2]
         
         try:
-            event = self.component.find_event_by_id(eventId)
-            
             map = {
                 'start' : 'start',
                 'ende' : 'end',
@@ -353,10 +342,24 @@ class Calendar(InteractiveModule):
                 'ort' : 'location'
             }
             
+            if attribute in ['start', 'ende']:
+                value = self._get_date(value)
+            
+            event = self.component.find_event_by_id(eventId)
+            
             setattr(event, map[attribute], value)
             
             self.component.update_object(event)
             
+            reply.add_line('{0} fuer Eintrag {1} wurde auf {2} gesetzt'.format(
+                attribute.capitalize(),
+                event.id,
+                value
+            ))
+            
+        except DateFormatInvalid:
+            reply.add_line("Datum muss im Format [d]d.[m]m.yyyy sein. Bsp: 12.5.2010")
+        
         except EventNotFound:
             reply.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
         
@@ -399,12 +402,12 @@ class Calendar(InteractiveModule):
                 
                 event = self.component.find_event_by_id(eventId)
                 
-                if count == 0:
+                if not event:
                     raise NoEventsFound
                 
             self.component.delete_object(event)
             
-            reply.add_line("Done.")
+            reply.add_line("Eintrag {0} wurde geloescht.".format(id_or_date))
             
         except InvalidObjectId:
             reply.add_line("Kein Eintrag zu dieser ID gefunden.")
