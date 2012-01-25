@@ -32,6 +32,7 @@ __version__ = '$Rev$'
 
 import logging
 import argparse
+import os
 
 from core import runlevel
 from core.bot import Bot
@@ -60,7 +61,9 @@ def parseargs():
     args.func(args)
 
 def config_init(args):
-    bot = Bot(logging.INFO)
+    config_root = os.environ['FPTBOT_CONFIG']
+    
+    bot = Bot(root=config_root, level=logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
     logger = logging.getLogger('tools.config')
@@ -89,7 +92,9 @@ def config_init(args):
     bot.init(runlevel.HALT)
 
 def config_read(args):
-    bot = Bot(logging.INFO)
+    config_root = os.environ['FPTBOT_CONFIG']
+    
+    bot = Bot(root=config_root, level=logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
     logger = logging.getLogger('tools.config')
@@ -129,7 +134,9 @@ def config_read(args):
     bot.init(runlevel.HALT)
 
 def config_write(args):
-    bot = Bot(logging.INFO)
+    config_root = os.environ['FPTBOT_CONFIG']
+    
+    bot = Bot(root=config_root, level=logging.INFO)
     bot.init(runlevel.LOCAL_FILESYSTEM)
     
     logger = logging.getLogger('tools.config') 
