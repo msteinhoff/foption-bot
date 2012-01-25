@@ -47,8 +47,8 @@ KEY_AUTH       = 'usermgmt.auth'
 KEY_IDLETIME   = 'usermgmt.idletime'
 KEY_SIGNONTIME = 'usermgmt.signontime'
 
-TOKEN_OP    = '\x64'
-TOKEN_VOICE = '\x43'
+TOKEN_OP    = '\x40'
+TOKEN_VOICE = '\x2B'
 
 #-------------------------------------------------------------------------------
 # Exceptions
@@ -334,7 +334,7 @@ class Usermgmt(InteractiveModule):
                 nickname = nickname[1:]
                 mode = Channel.USERMODE_OP
 
-            if nickname.startswith(TOKEN_VOICE): 
+            elif nickname.startswith(TOKEN_VOICE): 
                 nickname = nickname[1:]
                 mode = Channel.USERMODE_VOICE
             
