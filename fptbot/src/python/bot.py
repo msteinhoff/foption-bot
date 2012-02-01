@@ -30,25 +30,13 @@ THE SOFTWARE.
 
 __version__ = '$Rev$'
 
-import argparse
+import os
 
 from core import runlevel
 from core.bot import Bot
 
-def parseargs():
-    parser = argparse.ArgumentParser(prog='bot', description='run the bot')
-    subparser = parser.add_subparsers()
-    
-    cmd_run = subparser.add_parser('run', help='run --help')
-    cmd_run.set_defaults(func=bot_run)
-    cmd_run.add_argument(dest='cfgdir', help='the configuration directory')
-    
-    args = parser.parse_args()
-    args.func(args)
-
-def bot_run(args):
-    bot = Bot(root=args.cfgdir)
-    bot.init(runlevel.NETWORK_INTERACTION)
-
 if __name__ == '__main__':
-    parseargs()
+    config_root = os.environ['FPTBOT_CONFIG']
+    
+    bot = Bot(root=config_root)
+    bot.init(runlevel.NETWORK_INTERACTION)
