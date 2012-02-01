@@ -32,15 +32,13 @@ __version__ = '$Rev$'
 
 import string
 
-from interaction.irc.source import ServerSource, ClientSource
+from objects.irc import ServerSource, ClientSource
 
 SPACE      = '\x20'
 COLON      = '\x3A'
 SPACECOLON = '\x20\x3A'
 EXMARK     = '\x21'
 AT         = '\x40'
-
-CHANNEL_TOKEN = '\x23'
 
 class Message(object):
     """

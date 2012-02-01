@@ -100,6 +100,26 @@ class Role(object):
         
         return (required & role == required) 
 
+    @staticmethod
+    def string(role):
+        """
+        Return the string representation of the given role.
+        
+        @param role: The role.
+        
+        @return The role string.
+        """
+        
+        strings = {
+            1: 'User',
+            2: 'Authenticated',
+            3: 'Authenticated',
+            4: 'Administrator',
+            7: 'Administrator'
+        }
+        
+        return strings[role]
+
 class Right(object):
     """
     Represents an individual right. (read, write, delete, etc)

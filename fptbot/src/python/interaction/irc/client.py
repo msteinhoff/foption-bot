@@ -38,10 +38,9 @@ import traceback
 
 from core import runlevel
 from core.config import Config
-from objects.irc import User
+from objects.irc import ClientSource, User
 from interaction.interaction import Interaction
 from interaction.irc import commands
-from interaction.irc.source import ClientSource
 from interaction.irc.message import Message
 from interaction.irc.networks import quakenet
 
@@ -251,9 +250,14 @@ class Client(Interaction, asynchat.async_chat):
             asyncore.loop()
             
         except Exception as msg:
-            #TODO: check which exceptions are caught here
-            #TODO  print errors
-            self.logger.error('starting client failed: %s', msg)
+            for module_name, module in self._modules.items():
+                try:
+                    self.logger.info('stopping module %s because starting the client failed', module_name)
+                    module.stop()
+                except Exception as msg:
+                    self.logger.error('starting the client failed and stopping module %s failed: %s', module_name, msg)
+            
+            raise msg
 
     def _stop(self):
         """

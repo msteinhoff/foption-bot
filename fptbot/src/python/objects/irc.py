@@ -31,12 +31,61 @@ THE SOFTWARE.
 __version__ = '$Rev$'
 
 _all = [
+    'ServerSource',
+    'ClientSource',
     'User',
     'Channel',
-    'Location',
+    'Location'
 ]
 
-from interaction.irc.message import CHANNEL_TOKEN
+CHANNEL_TOKEN = '\x23'
+
+class ServerSource(object):
+    """
+    A IRC server source entity.
+    """
+    
+    def __init__(self, servername=None):
+        """
+        Create a new instance.
+        
+        @param servername: The servername of the entity
+        """
+        
+        self.servername = servername or ''
+        
+    def __str__(self):
+        """
+        Return the string representation in the format 'servername'.
+        """
+         
+        return '{0}'.format(self.servername)
+
+
+class ClientSource(object):
+    """
+    A IRC client source entity.
+    """
+    
+    def __init__(self, nickname=None, ident=None, host=None):
+        """
+        Create a new instance.
+        
+        @param nickname: The nickname of the entity
+        @param ident: The ident of the entity
+        @param host: The hostname of the entity
+        """
+        
+        self.nickname = nickname or ''
+        self.ident = ident or ''
+        self.host = host or ''
+        
+    def __str__(self):
+        """
+        Return the string representation in the format 'nickname!ident@host'.
+        """
+         
+        return '{0}!{1}@{2}'.format(self.nickname, self.ident, self.host)
 
 class User(object):
     AWAY         = 'a'
@@ -169,8 +218,9 @@ class Channel(object):
     A channel entity.
     """
     
-    USERMODE_OP    = 1
-    USERMODE_VOICE = 2
+    USERMODE_NONE  = 1
+    USERMODE_OP    = 2
+    USERMODE_VOICE = 4
     
     def __init__(self, name, topic=None):
         """
@@ -197,7 +247,7 @@ class Channel(object):
         
         pass
     
-    def add_user(self, user, mode=None):
+    def add_user(self, user, mode=USERMODE_NONE):
         """
         Add a user object to the channel.
         
@@ -206,16 +256,6 @@ class Channel(object):
         """
         
         self.users[user.source.nickname] = (user, mode)
-        
-    def set_user_mode(self, nickname, mode):
-        """
-        Updates the user mode.
-        
-        @param nickname: The nickname of the user.
-        @param mode: The new user mode.
-        """
-        
-        self.users[nickname] = (self.get_user(nickname), mode)
         
     def get_user(self, nickname):
         """
@@ -226,6 +266,16 @@ class Channel(object):
         
         return self.users[nickname][0]
     
+    def set_user_mode(self, nickname, mode):
+        """
+        Updates the user mode.
+        
+        @param nickname: The nickname of the user.
+        @param mode: The new user mode.
+        """
+        
+        self.users[nickname] = (self.get_user(nickname), mode)
+        
     def get_user_mode(self, nickname):
         """
         Return the mode of a user by its nickname.
@@ -327,3 +377,20 @@ class Location(object):
         """
         
         return (required | location == required)
+    
+    @staticmethod
+    def string(location):
+        """
+        Return the string representation of the given location.
+        
+        @param location: The location.
+        
+        @return The location string.
+        """
+        
+        strings = {
+            1: 'Channel',
+            2: 'Query'
+        }
+        
+        return strings[location]
