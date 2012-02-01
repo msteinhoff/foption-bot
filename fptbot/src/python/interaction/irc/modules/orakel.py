@@ -34,7 +34,8 @@ __version__ = '$Rev$'
 import random
 import re
 
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply
+from objects.irc import Location
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse
 
 #-------------------------------------------------------------------------------
 # Business Logic
@@ -54,7 +55,8 @@ class Orakel(InteractiveModule):
         return [
             InteractiveModuleCommand(
                 keyword='wer', 
-                callback=self.who
+                callback=self.who,
+                location=Location.CHANNEL
             ),
             InteractiveModuleCommand(
                 keyword='decide',
@@ -67,29 +69,29 @@ class Orakel(InteractiveModule):
     #---------------------------------------------------------------------------
     # module commands
     #---------------------------------------------------------------------------
-    def who(self, event, location, command, parameter):
-        reply = InteractiveModuleReply()
+    def who(self, request):
+        response = InteractiveModuleResponse()
         
-        channel_name = event.parameter[0]
+        channel_name = request.target
         
         channel = self.usermgmt.chanlist.get(channel_name)
         
         user = random.choice(channel.get_users().keys())
         
-        reply.add_line('Meine Wahl fällt auf {0}!'.format(user))
+        response.add_line('Meine Wahl fällt auf {0}!'.format(user))
         
-        return reply
+        return response
     
-    def decide(self, event, location, command, parameter):
-        reply = InteractiveModuleReply()
+    def decide(self, request):
+        response = InteractiveModuleResponse()
         
-        issue = parameter[0]
+        issue = request.parameter[0]
         
         if len(issue) == 0:
             if random.randint(1,1000) % 2 == 0:
-                reply.add_line('Du solltst dich dafür entscheiden!')
+                response.add_line('Du solltst dich dafür entscheiden!')
             else:
-                reply.add_line('Du solltst dich dagegen entscheiden!')
+                response.add_line('Du solltst dich dagegen entscheiden!')
         
         else:
             choices = re.sub('( oder | or )', ',', issue).split(',')
@@ -98,13 +100,14 @@ class Orakel(InteractiveModule):
                 pick = choices[0]
                 
                 if random.randint(1,1000) % 2 == 0:
-                    reply.add_line('Du solltst dich für \'{0}\' entscheiden!'.format(pick.strip()))
+                    response.add_line('Du solltst dich für \'{0}\' entscheiden!'.format(pick.strip()))
                 else:
-                    reply.add_line('Du solltst dich gegen \'{0}\' entscheiden'.format(pick.strip()))
+                    response.add_line('Du solltst dich gegen \'{0}\' entscheiden'.format(pick.strip()))
+            
             else:
                 pick = random.choice(choices)
                 
-                reply.add_line('Du solltst dich für \'{0}\' entscheiden'.format(pick.strip()))
+                response.add_line('Du solltst dich für \'{0}\' entscheiden'.format(pick.strip()))
         
-        return reply
+        return response
     

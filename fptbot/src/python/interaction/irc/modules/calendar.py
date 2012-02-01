@@ -41,7 +41,7 @@ from core.config import Config
 from objects.calendar import Event
 
 from components.calendar import InvalidObjectId
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply, ModuleError, Location
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleRequest, InteractiveModuleResponse, ModuleError, Location
 
 #-------------------------------------------------------------------------------
 # Constants
@@ -108,18 +108,16 @@ class Calendar(InteractiveModule):
             InteractiveModuleCommand(
                  keyword='kalender',
                  callback=self.display_calendar_address,
-                 syntaxhint=''
             ),
             InteractiveModuleCommand(
                  keyword='listtoday',
                  callback=self.display_events_today,
-                 syntaxhint=''
             ),
             InteractiveModuleCommand(
                  keyword='listdeleted',
                  callback=self.display_deleted_objects,
                  pattern=r'^(.*)$',
-                 syntaxhint='[event|contact]'
+                 syntaxhint='[kalendar|event|kontakt]'
             ),
             InteractiveModuleCommand(
                  keyword='restore',
@@ -221,36 +219,43 @@ class Calendar(InteractiveModule):
         Timer callback function.
         """
         
-        reply = self.display_events_by_date(None, Location.CHANNEL, None, [date])
+        request = InteractiveModuleRequest(
+        )
+        
+        response = self.display_events_by_date(None, Location.CHANNEL, None, [date])
         
         for channel in self.usermgmt.chanlist.get_channels().values():
-            self.send_reply(channel, reply)
+            self.send_response(channel, response)
     
     #---------------------------------------------------------------------------
     # InteractiveModule commands - display
     #---------------------------------------------------------------------------
-    def display_calendar_address(self, event, location, command, parameter):
+    def display_calendar_address(self, request):
         """
         Display the web calendar's address.
         """
         
-        return InteractiveModuleReply(self.config.get('calendarUrl'))
+        response = InteractiveModuleResponse(self.config.get('calendarUrl'))
+        
+        return response
     
-    def display_events_today(self, event, location, command, parameter):
+    def display_events_today(self, request):
         """
         Display today's events, if any.
         """
         
-        return self.display_events_by_date(event, location, command, [date.today()])
+        request.parameter = [date.today()]
+        
+        return self.display_events_by_date(request)
     
-    def display_events_by_date(self, event, location, command, parameter):
+    def display_events_by_date(self, request):
         """
         Display events occuring at the given date.
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
-        date = parameter[0]
+        date = request.parameter[0]
         
         try:
             calendar_events = self.component.find_events_by_date(date)
@@ -259,39 +264,39 @@ class Calendar(InteractiveModule):
                 raise NoEventsFound
             
             for calendar_event in calendar_events:
-                reply.add_line("ID {0}: {1}".format(calendar_event.id, calendar_event.title))
+                response.add_line("ID {0}: {1}".format(calendar_event.id, calendar_event.title))
             
         except NoEventsFound:
-            reply.add_line('Keine Termine gefunden.')
+            response.add_line('Keine Termine gefunden.')
             
-        return reply
+        return response
     
     def display_deleted_objects(self, event, location, command, parameter):
         """
         """
         
-        return InteractiveModuleReply('not implemented')
+        return InteractiveModuleResponse('not implemented')
     
-    def restore_deleted_object(self, event, location, command, parameter):
+    def restore_deleted_object(self, request):
         """
         """
         
-        return InteractiveModuleReply('not implemented')
+        return InteractiveModuleResponse('not implemented')
     
     #---------------------------------------------------------------------------
     # InteractiveModule commands - events
     #---------------------------------------------------------------------------
-    def insert_event(self, event, location, command, parameter):
+    def insert_event(self, request):
         """
         Create a new event.
         
         .addevent <startdate>[-<enddate>] title
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
-        date = parameter[0]
-        title = parameter[1]
+        date = request.parameter[0]
+        title = request.parameter[1]
         
         try:
             if '-' not in date:
@@ -309,15 +314,15 @@ class Calendar(InteractiveModule):
             event = Event(calendar=calendar, start=dateFrom, end=dateTo, title=title)
             event = self.component.insert_object(event)
             
-            reply.add_line("Eintrag erfolgreich eingefügt! ID: {0}".format(event.id))
+            response.add_line("Eintrag erfolgreich eingefügt! ID: {0}".format(event.id))
             
         except DateFormatInvalid:
-            reply.add_line("Datum muss im Format [d]d.[m]m.yyyy sein. Bsp: 12.5.2010")
+            response.add_line("Datum muss im Format [d]d.[m]m.yyyy sein. Bsp: 12.5.2010")
         
         except DateRangeInvalid as e:
-            reply.add_line('Ungültiges Datum: {0}.'.format(e))
+            response.add_line('Ungültiges Datum: {0}.'.format(e))
         
-        return reply
+        return response
     
     def change_event(self, event, location, command, parameter):
         """
@@ -327,7 +332,7 @@ class Calendar(InteractiveModule):
         Syntax: <id> <start|ende|titel|beschreibung|ort> <wert>
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
         eventId = parameter[0]
         attribute = parameter[1]
@@ -351,29 +356,29 @@ class Calendar(InteractiveModule):
             
             self.component.update_object(event)
             
-            reply.add_line('{0} fuer Eintrag {1} wurde auf {2} gesetzt'.format(
+            response.add_line('{0} fuer Eintrag {1} wurde auf {2} gesetzt'.format(
                 attribute.capitalize(),
                 event.id,
                 value
             ))
             
         except DateFormatInvalid:
-            reply.add_line("Datum muss im Format [d]d.[m]m.yyyy sein. Bsp: 12.5.2010")
+            response.add_line("Datum muss im Format [d]d.[m]m.yyyy sein. Bsp: 12.5.2010")
         
         except EventNotFound:
-            reply.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
+            response.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
         
-        return reply
+        return response
     
-    def delete_event(self, event, location, command, parameter):
+    def delete_event(self, request):
         """
         .delevent [<id>|<datum>]
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
         # when only one parameter is defined a string is returned
-        id_or_date = parameter[0]
+        id_or_date = request.parameter[0]
         
         try:
             try:
@@ -407,42 +412,42 @@ class Calendar(InteractiveModule):
                 
             self.component.delete_object(event)
             
-            reply.add_line("Eintrag {0} wurde geloescht.".format(id_or_date))
+            response.add_line("Eintrag {0} wurde geloescht.".format(id_or_date))
             
         except InvalidObjectId:
-            reply.add_line("Kein Eintrag zu dieser ID gefunden.")
+            response.add_line("Kein Eintrag zu dieser ID gefunden.")
         
         except NoEventsFound:
-            reply.add_line("Kein Eintrag zu diesem Datum gefunden.")
+            response.add_line("Kein Eintrag zu diesem Datum gefunden.")
         
         except AmbiguousEventsFound as error:
-            reply.add_line('Mehrere Einträge gefunden:')
-            [reply.add_line("(ID={0}) {1}".format(event.id, event.title)) for event in error.message]
+            response.add_line('Mehrere Einträge gefunden:')
+            [response.add_line("(ID={0}) {1}".format(event.id, event.title)) for event in error.message]
         
-        return reply
+        return response
     
-    def search_event(self, event, location, command, parameter):
+    def search_event(self, request):
         """
         Search for an event
         
         .searchevent <text>
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
-        query = parameter[0]
+        query = request.parameter[0]
         
         try:
             events = self.component.find_events_by_substring(query)
             
-            [reply.add_line("(ID={0}) {1}".format(event.id, event.title)) for event in events]
+            [response.add_line("(ID={0}) {1}".format(event.id, event.title)) for event in events]
             
         except NoEventsFound:
-            reply.add_line("Keine Einträge mit diesem Inhalt gefunden.")
+            response.add_line("Keine Einträge mit diesem Inhalt gefunden.")
 
-        return reply
+        return response
     
-    def topic_event(self, event, location, command, parameter):
+    def topic_event(self, request):
         """
         Post the given event to the current topic.
         .topicevent 
@@ -450,9 +455,9 @@ class Calendar(InteractiveModule):
         TODO: implement
         """
         
-        reply = InteractiveModuleReply()
+        response = InteractiveModuleResponse()
         
-        eventId = int(parameter[0])
+        eventId = int(request.parameter[0])
         
         try:
             result = self.component.find_event_by_id(eventId)
@@ -460,40 +465,47 @@ class Calendar(InteractiveModule):
             if result is None:
                 raise EventNotFound
             
-            reply.add_line('currently not implemented');
+            response.add_line('currently not implemented');
             
         except EventNotFound:
-            reply.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
+            response.add_line('Kein Event mit ID {0} gefunden'.format(eventId))
             
-        return reply
+        return response
     
     #---------------------------------------------------------------------------
     # InteractiveModule commands - contacts
     #---------------------------------------------------------------------------
-    def insert_contact(self, event, location, command, parameter):
+    def insert_contact(self, request):
         """
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
+        response = InteractiveModuleResponse("not implemented")
+        
+        return response
     
-    def change_contact(self, event, location, command, parameter):
+    def change_contact(self, request):
         """
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
+        response = InteractiveModuleResponse("not implemented")
+        
+        return response
     
-    def delete_contact(self, event, location, command, parameter):
+    def delete_contact(self, request):
         """
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
+        response = InteractiveModuleResponse("not implemented")
+        
+        return response
     
-    def search_contact(self, event, location, command, parameter):
+    def search_contact(self, request):
         """
         """
         
-        return InteractiveModuleReply().add_line("not implemented")
-
+        response = InteractiveModuleResponse("not implemented")
+        
+        return response
 
 class CalendarConfig(Config):
     identifier = 'interaction.irc.calendar'

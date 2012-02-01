@@ -48,7 +48,7 @@ MIRC_COLOR = '\x03'
 class ModuleError(BotError): pass
 class InteractiveModuleError(ModuleError): pass
 class InvalidCommandError(InteractiveModuleError): pass
-class InvalidArgumentError(InteractiveModuleError): pass
+class InvalidParameterError(InteractiveModuleError): pass
 class InvalidLocationError(InteractiveModuleError): pass
 class InvalidRoleError(InteractiveModuleError): pass
 
@@ -308,27 +308,40 @@ class InteractiveModule(Module):
                 raise InvalidRoleError(command_object.role)
             
             callback = command_object.callback
-            parameter = command_object.match_arguments(parameter)
+            parameter = command_object.match_parameter(parameter)
             
-            reply = callback(event, location, command, parameter)
+            request = InteractiveModuleRequest(
+                event=event,
+                source=event.source,
+                target=target,
+                message=message,
+                location=location,
+                role=role,
+                command=command,
+                parameter=parameter
+            )
+            
+            response = callback(request)
         
         except InvalidLocationError as required_location:
-            reply = InteractiveModuleReply()
-            reply.use_notice()
-            reply.add_line('Befehl geht nur im {0}'.format(required_location))
+            response = InteractiveModuleResponse()
+            response.send_to(event.source.nickname)
+            response.use_notice()
+            response.add_line('Befehl {0} geht nur im {1}'.format(command, Location.string(required_location[0])))
         
         except InvalidRoleError as required_role:
-            reply = InteractiveModuleReply()
-            reply.add_line('Nicht genug rechte (benötigt: {0})'.format(required_role))
+            response = InteractiveModuleResponse()
+            response.send_to(event.source.nickname)
+            response.use_notice()
+            response.add_line('Nicht genug Rechte (benötigt: {0})'.format(Role.string(required_role[0])))
         
-        except InvalidArgumentError:
-            reply = InteractiveModuleReply()
-            reply.add_line('usage: .{0} {1}'.format(command_object.keyword, command_object.syntaxhint))
+        except InvalidParameterError:
+            response = InteractiveModuleResponse()
+            response.add_line('usage: .{0} {1}'.format(command_object.keyword, command_object.syntaxhint))
         
         except Exception as ex:
-            #Should not happen, but just in case.
-            #TODO: throw stack trace
-            reply = 'Es ist ein interner Fehler aufgetreten, lol opfeeeeeer!'
+            response = InteractiveModuleResponse()
+            response.add_line('Es ist ein interner Fehler aufgetreten, lol opfeeeeeer!')
             
             self.client.logger.exception('Unhandled exception "{1}" thrown in {0}'.format(
                 self.__class__.__name__,
@@ -338,56 +351,63 @@ class InteractiveModule(Module):
         #-----------------------------------------------------------------------
         # send reply
         #-----------------------------------------------------------------------
-        if reply is not None:
+        if response and not response.target:
             if location == Location.CHANNEL:
-                target = event.parameter[0]
+                response.target = event.parameter[0]
                 
             elif location == Location.QUERY:
-                target = event.source.nickname
+                response.target = event.source.nickname
         
-        self.send_reply(target, reply)
+        self.send_response(response.target, response)
     
-    def send_reply(self, target, reply):
+    def send_response(self, target, response):
         """
-        Send a reply to target.
+        Send a response to the target.
         
-        @param command_object: How the reply should be sent.
-        @param target: The receiver of the reply.
-        @param reply: The reply to send, String or Reply object.
+        @param target: The receiver of the response.
+        @param response: The response to send.
         """
         
-        if hasattr(reply, 'replies') and hasattr(reply, 'type'):
-            sender = self.client.get_command(reply.type).get_sender()
+        if hasattr(response, 'replies') and hasattr(response, 'type'):
+            sender = self.client.get_command(response.type).get_sender()
             sender.target = target
             
-            for reply in reply.replies:
-                sender.text = '{0}: {1}'.format(self.identifier, reply)
+            for line in response.replies:
+                sender.text = '{0}: {1}'.format(self.identifier, line)
                 sender.send()
                 time.sleep(0.2)
             
         else:
             sender = self.client.get_command('Privmsg').get_sender()
             sender.target = target
-            sender.text = '{0}: {1}'.format(self.identifier, reply)
+            sender.text = '{0}: {1}'.format(self.identifier, response)
             sender.send()
 
 class InteractiveModuleCommand(object):
     """
-    Represent a module command that can be triggered by IRC users.
+    The static definition of an InteractiveModule command.
+    
+    Module commands can be triggered by other IRC clients sending
+    messages in a pre-defined format. When a command is detected,
+    a InteractiveModuleRequest is generated and sent to the command
+    handler callback.
+    
+    After the callback has been finished with processing the request,
+    it returns a InteractiveModuleResponse which is sent back to the
+    IRC server.
     """
     
     def __init__(self, keyword, callback, pattern=None, location=Location.CHANNEL, role=Role.USER, syntaxhint=None, help=None):
         """
-        Initialize the command.
+        Define a module command.
 
-        TODO: fallback to privmsg reply instead of raising exception?
-        
         @param keyword: The keyword that triggers the command.
-        @param pattern: A regex pattern that defines the arguments.
+        @param callback: The callback function that handles the command.
+        @param pattern: A regex pattern that defines the command parameters.
         @param location: The location where the command can be executed.
-        @param reply: The command the reply should be sent with.
         @param role: The role the calling user needs to have.
-        @param callback: The callback function.
+        @param syntaxhint: A string that is sent when using invalid parameters.
+        @param help: A string that describes the command.
         """
         
         self.keyword = keyword
@@ -404,15 +424,16 @@ class InteractiveModuleCommand(object):
         self.syntaxhint = syntaxhint or ''
         self.help = help or ''
         
-    def match_arguments(self, data):
+    def match_parameter(self, data):
         """
-        Match and extract data according to the object's pattern.
+        Match and extract data according to the commands's pattern.
         
-        @param data: A string.
+        @param data: The raw parameter string.
         
-        @return: A tuple, the format depends on the pattern.
+        @return: A tuple, the format depends on the command's pattern.
         
-        @raise ValueError If the data is invalid.
+        @raise ValueError If the data format is invalid.
+        @raise InvalidParameterError If there were no matches found.
         """
         
         if self.pattern is None:
@@ -433,26 +454,96 @@ class InteractiveModuleCommand(object):
             raise ValueError
         
         except (KeyError, IndexError):
-            raise InvalidArgumentError
+            raise InvalidParameterError
         
         return arguments
 
-class InteractiveModuleReply(object):
+class InteractiveModuleRequest(object):
+    """
+    The runtime request of an InteractiveModule command.
+    
+    A runtime request is generated each time the command is triggered
+    and passed to the command handler callback.
+    It contains context information about the incoming command that
+    can be processed by the command handler.
+    """
+    
+    def __init__(self, event=None, source=None, target=None, message=None, location=None, role=None, command=None, parameter=None):
+        """
+        Initialize a runtime request.
+        
+        @param event: The original event of the command.
+        @param source: Who sent the command.
+        @param target: Where the command was sent to.
+        @param message: The raw message, extracted from the event.
+        @param location: The location where the command was sent.
+        @param role: The role of the user sending the command.
+        @param command: The actual command name.
+        @param parameter"The command parameters.
+        """
+        
+        self.event = event
+        self.source = source
+        self.target = target
+        self.message = message
+        self.location = location
+        self.role = role
+        self.command = command
+        self.parameter = parameter
+
+class InteractiveModuleResponse(object):
+    """
+    The runtime response of an InteractiveModule command.
+    
+    A response is created by the command handler callback and
+    contains 1-n reply lines.
+    """
     def __init__(self, firstline=None):
+        """
+        Initialize a runtime response.
+        
+        The default IRC command used is Privmsg.
+        
+        @param firstline: The first line of the response.
+        @param target: The target to send the response to.
+        """
+        
         self.use_message()
         
-        if firstline is None:
-            self.replies = []
-        else:
-            self.replies = [firstline]
+        self.replies = []
         
+        if firstline:
+            self.replies.append(firstline)
+            
     def add_line(self, line):
+        """
+        Add another line to the reponse.
+        
+        @param line: The text to add.
+        """
         self.replies.append(line)
-        
-        return self
     
-    def use_notice(self):
-        self.type = 'Notice'
+    def send_to(self, target):
+        """
+        Override the target to send the response to.
         
+        The target where the response is sent to is computed by the
+        InteractiveModule framework. It can be overridden using this
+        method.
+        
+        @param target: A valid channel or nickname to send the response to.
+        """
+        
+        self.target = target
+    
     def use_message(self):
+        """
+        Use the Privmsg IRC command for the reply.
+        """
         self.type = 'Privmsg'
+
+    def use_notice(self):
+        """
+        Use the Notice IRC command for the reply.
+        """
+        self.type = 'Notice'

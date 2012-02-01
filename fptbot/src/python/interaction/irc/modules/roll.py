@@ -33,7 +33,7 @@ __version__ = '$Rev$'
 
 import random
 
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleReply
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse 
 
 #-------------------------------------------------------------------------------
 # Business Logic
@@ -62,26 +62,38 @@ class Roll(InteractiveModule):
     #---------------------------------------------------------------------------
     # module commands
     #---------------------------------------------------------------------------
-    def roll(self, event, location, command, parameter):
-        reply = InteractiveModuleReply()
+    def roll(self, request):
+        response = InteractiveModuleResponse()
         
-        if parameter[1]:
-            min = int(parameter[0])
-            max = int(parameter[1])
+        if request.parameter[1]:
+            min_value = int(request.parameter[0])
+            max_value = int(request.parameter[1])
         else:
-            min = 1
-            max = int(parameter[0])
+            min_value = 1
+            max_value = int(request.parameter[0])
     
-        if max <= 0 or max <= min:
-            return
+        if max_value <= 0:
+            response.add_line('Zahl muss groesser als 0 sein')
+            return response
+            
+        if max_value <= 1:
+            response.add_line('Zahl muss groesser als 1 sein')
+            return response
         
-        result = random.randint(min, max)
+        if max_value == min_value:
+            response.add_line('Erste Zahl ({0}) == zweite Zahl ({0}), wie soll das denn gehen du Trottel?'.format(min_value, min_value))
+            return response
         
-        reply.add_line('{0} has rolled: {1} ({2}-{3})'.format(
-            event.source.nickname,
+        if max_value < min_value:
+            max_value, min_value = min_value, max_value
+            
+        result = random.randint(min_value, max_value)
+        
+        response.add_line('{0} has rolled: {1} ({2}-{3})'.format(
+            request.source.nickname,
             result,
-            min,
-            max
+            min_value,
+            min_value
         ))
         
-        return reply
+        return response

@@ -34,10 +34,9 @@ import time
 import hashlib
 
 from objects.principal import Role
-from objects.irc import User, Channel, Location
-from interaction.irc.source import ClientSource
+from objects.irc import ClientSource, User, Channel, Location
 from interaction.irc.message import SPACE
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, ModuleError
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse, ModuleError
 
 #-------------------------------------------------------------------------------
 # Constants
@@ -89,6 +88,7 @@ class Usermgmt(InteractiveModule):
 
         listeners.update({
             'Join': self.process_join,
+            'Mode': self.process_mode,
             'Part': self.process_part,
             'Kick': self.process_kick,
             'Quit': self.process_quit,
@@ -184,7 +184,86 @@ class Usermgmt(InteractiveModule):
             whois = self.client.get_command('Whois').get_sender()
             whois.user = event.source.nickname
             whois.send()
+    
+    def process_mode(self, event):
+        """
+        Process all incoming MODE events.
+        
+        Currently only user mode changes in channels are process.
+        
+        The IRC protocol is really buggy/incomplete at this point.
+        Modes can not be correctly detected: When a user is opped and
+        has voice on a given channel and the bot joins that channel,
+        the user is only flagged as op. When op is revoked, The only
+        way to check the user mode reliable in this situation is
+        another WHOIS or NAMES request, which out put unnecessary load
+        on the bot, connection and server. 
+        
+        Because of the incomplete protocol, this method is only listening
+        for user op mode changes.
+        
+        This method has limited support for multi-mode changes, e.g.
+        +oooo Nickname1 Nickname2 Nickname3 Nickname4d
+        """
+        
+        CHANGE_GRANT = 1
+        CHANGE_REVOKE = 1
+        
+        target = event.parameter[0]
+        modes = event.parameter[1]
+        users = event.parameter[2:]
+        
+        #-----------------------------------------------------------------------
+        # Process only user modes
+        #-----------------------------------------------------------------------
+        if Location.get(target) is not Location.CHANNEL:
+            return
+        
+        #-----------------------------------------------------------------------
+        # Check what change needs to be applied
+        #-----------------------------------------------------------------------
+        if modes[0] == '+':
+            change = CHANGE_GRANT
             
+        elif modes[0] == '-':
+            change = CHANGE_REVOKE
+            
+        else:
+            # unknown condition, dont process
+            return
+        
+        # remove change flag from modes
+        modes = modes[1:]
+        
+        #-----------------------------------------------------------------------
+        # Apply mode changes
+        #-----------------------------------------------------------------------
+        channel = self.chanlist.get(target)
+        
+        for index, nickname in enumerate(users):
+            mode = modes[index]
+            
+            # process only op changes
+            if mode != 'o':
+                continue
+            
+            if change == CHANGE_GRANT:
+                channel.set_user_mode(nickname, Channel.USERMODE_OP)
+                msg = 'Setting mode to +{0} for user {1} on channel {2}'.format(
+                    modes[index],
+                    nickname,
+                    channel.name
+                )
+                
+            elif change == CHANGE_REVOKE:
+                channel.set_user_mode(nickname, None)
+                msg = 'Setting mode to -{0} for user {1} on channel {2}'.format(
+                    modes[index],
+                    nickname,
+                    channel.name
+                )
+            
+            self.client.logger.info(msg)
     
     def process_part(self, event):
         """
@@ -280,7 +359,7 @@ class Usermgmt(InteractiveModule):
         else:
             self.client.logger.info('User {0} has quit IRC'.format(event.source.nickname))
             
-            self.userlist.remove(event.source)
+            self.userlist.remove(event.source.nickname)
     
     def process_nick(self, event):
         """
@@ -407,18 +486,20 @@ class Usermgmt(InteractiveModule):
     #---------------------------------------------------------------------------
     # User management
     #---------------------------------------------------------------------------
-    def list_user(self, event, location, command, parameter):
-        return "Adminliste: (not implemented)"
+    def list_user(self, request):
+        response = InteractiveModuleResponse('not implemented')
+        
+        return response
     
-    def insert_user(self, event, location, command, parameter):
+    def insert_user(self, request):
         """
         .adduser [password]
         """
         
-        password = parameter[0]
+        """password = request.parameter[0]
         
         try:
-            user = self.getAuth(event.source)
+            user = self.getAuth(request.source)
             return "User '???' wurde als Admin hinzugefügt."
         
             if not user:
@@ -436,14 +517,20 @@ class Usermgmt(InteractiveModule):
         except UserExists:
             return "Du hast bereits einen Account!"
         
-        return "Dein Account wurde erstellt!"
+        return "Dein Account wurde erstellt!"""
+        response = InteractiveModuleResponse('not implemented')
+        
+        return response
     
-    def change_user(self, event, location, command, parameter):
-        pass
+    def change_user(self, request):
+        response = InteractiveModuleResponse('not implemented')
+        
+        return response
 
-    def delete_user(self, event, location, command, parameter):
-        return "User '???' als Admin entfernt."
-        return "User '???' befindet sich nicht in der Liste."
+    def delete_user(self, request):
+        response = InteractiveModuleResponse('not implemented')
+        
+        return response
 
     #---------------------------------------------------------------------------
     # public API
