@@ -226,6 +226,15 @@ class Channel(object):
         
         return self.users[nickname][0]
     
+    def get_user_mode(self, nickname):
+        """
+        Return the mode of a user by its nickname.
+        
+        @param nickname: The nickname of the user object.
+        """
+        
+        return self.users[nickname][1]
+    
     def get_users(self):
         """
         Return the current user list of the channel.
