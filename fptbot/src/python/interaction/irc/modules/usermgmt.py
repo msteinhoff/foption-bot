@@ -392,7 +392,7 @@ class Usermgmt(InteractiveModule):
         Process all incoming topic events.
         """
         
-        channel_name, topic = event.parameter[1:3]
+        channel_name, topic = event.parameter
         
         channel = self.chanlist.get(channel_name)
         channel.topic = topic
