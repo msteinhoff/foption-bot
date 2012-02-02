@@ -351,12 +351,12 @@ class InteractiveModule(Module):
         #-----------------------------------------------------------------------
         # send reply
         #-----------------------------------------------------------------------
-        if response and not response.target:
+        if response and not hasattr(response, 'target'):
             if location == Location.CHANNEL:
-                response.target = event.parameter[0]
+                response.send_to(event.parameter[0])
                 
             elif location == Location.QUERY:
-                response.target = event.source.nickname
+                response.send_to(event.source.nickname)
         
         self.send_response(response.target, response)
     
