@@ -3,22 +3,28 @@
 Created on 27.01.2012
 
 @author: rack
-
-
 '''
-#-------------------------------------------------------------------------------
-# Imports
-#-------------------------------------------------------------------------------
 import logging
 import random
-from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse, InteractiveModuleRequest
-from components.topic import DataNotFound, NoDataAvailable
+
+from datetime import date
+
+from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse
+from components.topic import TopicNotFound, AdditionNotFound, NoAdditionAvailable, NoAffectedRows
+
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
+BOT_IS_OPERATOR = 2
+RANDOM_YEAR_START = 1983
+RANDOM_YEAR_END = 2020
+DEFAULT_TOPIC = 'Willkommen im Sammelbecken für sozial Benachteiligte'
 #-------------------------------------------------------------------------------
 # Module 'Logic'
 #-------------------------------------------------------------------------------
 class Topic(InteractiveModule):
     """
-    This module provides topic functions
+    This module provides topic functions    
     """
     def initialize(self):
         """
@@ -30,6 +36,9 @@ class Topic(InteractiveModule):
 
         
     def module_identifier(self):
+        """
+        Declare the module identifier.
+        """
         return 'TopicMod'
     
     def init_commands(self):
@@ -65,96 +74,133 @@ class Topic(InteractiveModule):
     def display_current_topic(self, request):
         """
         Display the current topic.
-        """
-        try:
-            topic = self.component.get_last_topic()
-            topic_text = topic.text
-            topic_addition = topic.topicaddition.text
-            topic_year = topic.year
-            topic_user = topic.user
-            
-            topic_string = self.component.create_topic_string(topic_text,topic_addition,topic_year)
-            return InteractiveModuleResponse('{0} set by {1}'.format(topic_string,topic_user))
-        except NoDataAvailable:
-            return InteractiveModuleResponse("No topic available.")
         
+        Usage: .topic
+               
+        @return InteractiveModuleResponse
+        """
+        response = InteractiveModuleResponse()
+        
+        try:
+            topic = self.component.get_last_topic()           
+            topic_string = self.component.create_topic_string(topic.text,topic.addition.text,topic.year)
+            response.add_line('{0} set by {1}'.format(topic_string,topic.user))
+        except TopicNotFound:
+            response.add_line("No topic available.")
+        
+        return response
     
     def set_new_topic(self, request):
         """
         Change the topic of a channel.
         
-        .settopic <'text'|reset>
-        """
+        Usage: .settopic <text|'reset'>
+        If the module receive the string 'reset', it will set the default topic
+        
+        @param request: A runtime request of an InteractiveModule command.
+        
+        @return InteractiveModuleResponse 
+        """        
+        response = InteractiveModuleResponse()
         
         #Normally, here I would check if there was set the mode +t in channel modes
         #because if it was set, I won't need to check the userMode.
         #But get_modes() is not implemnted, yet :(
         #channelModes = channelObject.get_modes()
         
-        channel_name = request.event.parameter[0]
-        channel_object = self.usermgmt.chanlist.get(channel_name)
-        userMode = channel_object.get_user_mode(self.client.me.source.nickname)
+        channel_object = self.usermgmt.chanlist.get(request.target)
+        userMode = channel_object.get_user_mode(self.me.source.nickname)
         try:
-            if (userMode == 2):
-                topic_text = request.parameter[0]
+            if (userMode == BOT_IS_OPERATOR):
+                text = request.parameter[0]
                 
-                if (topic_text == 'reset'): #standard topic
-                    topic_text = 'Willkommen im Sammelbecken für sozial Benachteiligte'
+                if (text == 'reset'): #default topic
+                    text = DEFAULT_TOPIC
     
-                topic_addition = self.component.get_rnd_addition()
-                topic_year = random.randint(1983,2020)
-                topic_user = request.event.source.nickname
-                self.component.insert_topic(topic_text,topic_addition,topic_year,topic_user)
-            
-                topic_addition_text = topic_addition.text
-                topic_string = self.component.create_topic_string(topic_text,topic_addition_text,topic_year)
-                        
-                topic_cmd = self.client.get_command('Topic').get_sender()              
-                topic_cmd.channel = channel_name
-                topic_cmd.topic = topic_string
+                addition = self.component.get_random_addition().text
+                year = random.randint(RANDOM_YEAR_START,RANDOM_YEAR_END)
+                               
+                topic_cmd = self.client.get_command('Topic').get_sender()  
+                topic_cmd.channel = request.target
+                topic_cmd.topic = self.create_topic_string(text,addition,year)
                 topic_cmd.send()
+                
+                self.component.insert_topic(text,addition,year,request.source.nickname)                                
             else:
-                return InteractiveModuleResponse("Bot needs to be an operator to do this.")
-        except NoDataAvailable:
-            return InteractiveModuleResponse("There are no topic additions available at the moment.")
+                response.add_line("Bot needs to be an operator to do this.")
+        except NoAdditionAvailable:
+                response.add_line("There are no topic additions available at the moment.")
+
+        return response
     
     
     def add_new_addition(self, request):
         """
         Insert a new addition to database
         
-        .addtopic <addtion>
-        """
+        Usage: .addtopic <addtion(text)>
         
-        topic = request.parameter[0]
-        nickname = request.event.source.nickname
-        try:
-            self.component.insert_addition(topic,nickname)
-            return InteractiveModuleResponse("The process was successful.")
-        except DataNotFound:
-            return InteractiveModuleResponse("There is no addition with the given ID.")
+        @param request: A runtime request of an InteractiveModule command.
+        
+        @return InteractiveModuleResponse
+        """
+        response = InteractiveModuleResponse()
+        self.component.insert_addition(request.parameter[0],request.source.nickname)
+        response.add_line("The process was successful.")
+        
+        return response
     
     
     def del_addition(self, request):
         """
-        Delete a addition.
+        Delete a addition with the given id.
         
         .deltopic <id>
-        """               
-        addition = request.parameter[0]
+        
+        @param request: A runtime request of an InteractiveModule command.
+        
+        @return: InteractiveModuleResponse
+        """
+        response = InteractiveModuleResponse()               
+
         try:
-            id = int(addition)
-            self.component.delete_addition_by_ID(id)
-            return InteractiveModuleResponse("Delete was successful.")
-        except DataNotFound:
-            return InteractiveModuleResponse("An entry with the given ID was not found.")
-        except:
-            return InteractiveModuleResponse("Please enter a valid ID!")
+            id = int(request.parameter[0])
+            self.component.delete_addition_by_id(id)
+            response.add_line("Delete was successful.")
+        except NoAffectedRows:
+            response.add_line("No entry was deleted.")
+        except ValueError:
+            response.add_line("Please enter a valid ID!")
+        
+        return response
         
                     
     def display_topic_additions(self, request):
         """
         Send a link to a list with all additions.
+        
+        Usage: .listtopic
+        
+        @return: InteractiveModuleResponse
         """
         return InteractiveModuleResponse("www.derlinkfehltnoch.de")
+    
+    
+    def create_topic_string(self,text,addition,year):
+        """
+        Return a formated topic string with text, addition and year
         
+        @param text: a topic text
+        @param addition: an addition text
+        @param year: a year for the second addition part
+        
+        @return: formated string
+        """          
+        if (year <= date.today().year):
+            since_until = "since"
+        else:
+            since_until = "until"
+            
+        return "127,1.:. Welcome� 7,1� 14,1F4,1=15,1O7,1=0,1P" \
+             + "7,1=0,1T7,1=0,1I7,1=15O4,1=14,1N 7,1�" \
+             + " 7,14Topic: {0} 47,1� {1} {2} {3}! .:.".format(text, addition, since_until, year)

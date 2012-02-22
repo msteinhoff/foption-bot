@@ -4,11 +4,10 @@ Created on 27.01.2012
 @author: rack
 '''
 
-__version__ = ''
-
 from sqlalchemy import Column, Integer, DateTime, Text
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.schema import ForeignKey
+
 from core.persistence import SqlAlchemyPersistence
 
 class Topic(SqlAlchemyPersistence.Base):
@@ -27,7 +26,7 @@ class Topic(SqlAlchemyPersistence.Base):
     user = Column(Text)
     
     #ORM - one-to-many
-    topicaddition = relationship('TopicAddition', backref=backref('topics'))
+    addition = relationship('TopicAddition', backref=backref('topics'))
     
     def __repr__(self):
         return '<Topic(id={0}|date={1}|text={2}|year={3}|user={4})>'.format(
@@ -40,7 +39,7 @@ class Topic(SqlAlchemyPersistence.Base):
     
 class TopicAddition(SqlAlchemyPersistence.Base):
     """
-    Represent an Addition for the topic component
+    Represent an addition for the topic component
     """
     
     __tablename__ = 'topicadditions'
@@ -58,4 +57,3 @@ class TopicAddition(SqlAlchemyPersistence.Base):
             self.text,
             self.user,
         )
-
