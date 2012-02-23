@@ -63,6 +63,12 @@ class Orakel(InteractiveModule):
                 callback=self.decide,
                 pattern=r'^((.+)$|$)',
                 syntaxhint='[Auswahl1[, [Auswahl2[, ...]]]]'
+            ),
+            InteractiveModuleCommand(
+                keyword='makemyday',
+                callback=self.sort,
+                pattern=r'^(.+)$',
+                syntaxhint='[Item1[, Item2[, ...]]]'
             )
         ]
     
@@ -111,3 +117,23 @@ class Orakel(InteractiveModule):
         
         return response
     
+
+    def sort(self,request):
+        """
+        Reorder the given items.
+        
+        @return: InteractiveModuleResponse()
+        """
+        response = InteractiveModuleResponse()
+        
+        items_unsorted = request.parameter[0].split(',')
+        items_sorted = []
+        
+        while len(items_unsorted) > 0:
+            num = random.randint(0,len(items_unsorted)-1)
+            items_sorted.append(items_unsorted[num].strip())
+            del items_unsorted[num]
+        
+        response.add_line(", ".join(items_sorted))
+        
+        return response
