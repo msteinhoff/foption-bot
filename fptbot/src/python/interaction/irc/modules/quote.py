@@ -3,11 +3,18 @@
 Created on 24.02.2012
 
 @author: rack
+
+TODO: - limit .delquote to admin only?
 '''
 import logging
 
 from interaction.irc.module import InteractiveModule, InteractiveModuleCommand, InteractiveModuleResponse
 from components.quote import NoQuoteAvailable, NoAffectedRows
+
+#-------------------------------------------------------------------------------
+# Constants
+#-------------------------------------------------------------------------------
+MAX_LENGTH_QUOTE = 375
 #-------------------------------------------------------------------------------
 # Module 'Logic'
 #-------------------------------------------------------------------------------
@@ -93,7 +100,7 @@ class Quote(InteractiveModule):
     def add_new_quote(self, request):
         """
         Add a new quote to database.
-        Max length of the quote is 400 letters.
+        Max length of the quote is 375 letters.
         
         Usage: .addquote <text>
         
@@ -101,9 +108,15 @@ class Quote(InteractiveModule):
         
         @return InteractiveModuleResponse
         """
-        response = InteractiveModuleResponse()       
-        self.component.insert_quote(request.parameter[0],request.source.nickname)
-        response.add_line("The process was successful.")
+        response = InteractiveModuleResponse()
+        
+        text = request.parameter[0]
+        if len(text) <= MAX_LENGTH_QUOTE:
+            self.component.insert_quote(text,request.source.nickname)
+            response.add_line("The process was successful.")
+        else:
+            response.add_line("Max length of a quote is {0} letters. Yours is {1}."
+                              .format(MAX_LENGTH_QUOTE,str(len(text))))
         
         return response
     
