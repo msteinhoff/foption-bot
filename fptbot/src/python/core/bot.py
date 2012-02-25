@@ -79,6 +79,7 @@ class Bot(object):
         self.register_subsystem('calendar-component', 'components.calendar.CalendarComponent')
         self.register_subsystem('facts-component', 'components.facts.FactsComponent')
         self.register_subsystem('topic-component', 'components.topic.TopicComponent')
+        self.register_subsystem('quote-component', 'components.quote.QuoteComponent')
         self.register_subsystem('irc-client', 'interaction.irc.client.Client')
         
     def get_object(self, name):
