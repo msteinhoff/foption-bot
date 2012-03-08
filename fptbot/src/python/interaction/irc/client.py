@@ -53,14 +53,14 @@ CRLF = '\x0D\x0A'
 # Business Logic
 #-------------------------------------------------------------------------------
 class Client(Interaction, asynchat.async_chat):
+    """
+    Provide a RFC 2812 compilant IRC client implementation using asyncore.
+    """
+    
     RUNLEVEL = runlevel.Runlevel(
         autoboot=True,
         minimum_start=runlevel.NETWORK_INTERACTION
     )
-    
-    """
-    Provide a RFC 2812 compilant IRC client implementation using asyncore.
-    """
     
     def __init__(self, bot):
         """
@@ -211,7 +211,7 @@ class Client(Interaction, asynchat.async_chat):
         """
         
         return self._modules[name]
-        
+    
     #---------------------------------------------------------------------------
     # connection handling
     #---------------------------------------------------------------------------

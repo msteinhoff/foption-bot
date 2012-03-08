@@ -80,6 +80,9 @@ list = [
     'UserOnChannelError', 'ChanOpPrivilegesNeededError',
 ]
 
+import string
+import random
+
 from core.bot import BotError
 from interaction.irc.message import Event
 
@@ -1150,12 +1153,66 @@ class NoMotdError(Command):
 
 class NoNicknameGivenError(Command):
     token = '431'
+    
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            nick = self.client.get_command('Nick').get_sender()
+            nick.nickname = self.client.config.get('nickname')
+            
+            if len(nick.nickname) == 0:
+                nick.nickname = self.client.config.get('anickname')
+                
+            if len(nick.nickname) == 0:
+                nick.nickname = 'Bot-' + ''.join(random.choice(string.ascii_uppercase) for x in range(3))
+            
+            self.client.logger.info(
+                'No nickname was given, trying to use %s',
+                self.client.me.source.nickname,
+                nick.nickname
+            )
+            
+            nick.send()
 
 class ErroneusNicknameError(Command):
     token = '432'
 
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            nick = self.client.get_command('Nick').get_sender()
+            nick.nickname = 'Bot-' + ''.join(random.choice(string.ascii_uppercase) for x in range(3))
+            
+            self.client.logger.info(
+                'Requested nickname %s is not valid on network, trying to use %s instead',
+                self.client.me.source.nickname,
+                nick.nickname
+            )
+            
+            nick.send()
+
 class NicknameInUseError(Command):
     token = '433'
+
+    class Receiver(Command.Receiver):
+        def _receive(self, event):
+            nick = self.client.get_command('Nick').get_sender()
+            nick.nickname = self.client.config.get('anickname')
+            
+            if nick.nickname == self.client.me.source.nickname:
+                # TODO honor NICKLEN from BounceReply
+                nickname_length = 15 #quakenet default, hardcoded
+                random_length = 3 #chosen by fair dice roll
+                nickname_maxlength = nickname_length - random_length
+                
+                nick.nickname = nick.nickname[nickname_maxlength:]
+                nick.nickname += ''.join(random.choice(string.ascii_uppercase) for x in range(random_length))
+            
+            self.client.logger.info(
+                'Requested nickname %s is already used on network, trying to use %s instead',
+                self.client.me.source.nickname,
+                nick.nickname
+            )
+            
+            nick.send()
 
 class NickCollisionError(Command):
     token = '436'
