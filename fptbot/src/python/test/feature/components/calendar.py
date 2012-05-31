@@ -30,23 +30,53 @@ THE SOFTWARE.
 
 __version__ = '$$'
 
-from core.persistence import Persistence
-import components.calendar
-import objects.calendar
+import datetime
+import json
 
-persistence = Persistence('/Users/msteinhoff/Work/Eclipse/foption/bot/data/sqlite/bot.db')
-sqlite = components.calendar.SqliteBackend(persistence)
+from core import runlevel
+from core.bot import Bot
+from objects.calendar import Calendar, Event
+from components.calendar import GoogleBackend
 
-datastore = components.calendar.DataStore()
-datastore.set_primary_backend(sqlite)
+try:
+    bot = Bot()
+    bot.init(runlevel.NETWORK_SERVICE)
+    
+    cc = bot.get_subsystem('calendar-component')
+    """
+    event = Event(start=datetime.date(2011, 9, 26), end=datetime.date(2011, 9, 27), title="sync-test")
+    event = cc.insert_object(event)
+    
+    scnds = cc.datastore.secondary_backends
+    gbe = [scnd for scnd in scnds if isinstance(scnd, GoogleBackend)][0]
+    
+    query = cc.datastore.get_query('event_by_id')
+    local_id = [identity for identity in event.identities if identity.backend.typename == 'GoogleBackend'][0]
+    
+    query.id = json.loads(local_id.identity)['edit']
+    
+    gev = gbe.find_objects(query)
+    
+    query = cc.datastore.get_query('all_calendars_feed')
+    
+    for i, calendar in enumerate(gbe.find_objects(query).entry):
+        print calendar.title.text
+        print calendar.id.text
+        
+        print calendar.find_url(gbe.LINK_EVENTFEED)
+        
+        print "---"
+    """
+    
+    calendar = Calendar(title='Party')
+    cc.insert_object(calendar)
+    
+    event = Event(calendar=calendar, start=datetime.date(2011, 9, 30), end=datetime.date(2011, 10, 1), title="gangbang bei baums mutter")
+    cc.insert_object(event)
+    
 
-#query = datastore.get_query('find_all_calendars')
-#print datastore.find_objects(query)
+except:
+    bot.get_logger().exception('Unhandled exception')
 
-#query = datastore.get_query('find_all_calendars')
-#print datastore.find_objects(query)
-
-test = objects.calendar.Calendar(name='foption', type=objects.calendar.Calendar.MANUAL)
-
-datastore.insert_object(test)
-print test
+finally:
+    bot.init(runlevel.HALT)
